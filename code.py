@@ -1,48 +1,248 @@
 import tkinter as tk
 from tkinter import ttk
 import json, os
+from PIL import Image, ImageTk
+import cairosvg # type: ignore
+import io
 
 class RecipeFinder:
     def __init__(self, master):
-        self.master = master
-        self.master.title("Recipe Finder by Mathilda Braun")
+
+        self.DEBUG = False
         self.dir_name = os.path.dirname(os.path.realpath(__file__))
-        print(self.dir_name)
-    
-        
         try:
+            #dummy
+
             loaded = os.open(f"{self.dir_name}/RecipeFinder/Recipes",0)
             print(loaded)
             with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="r", encoding="utf-8") as f:
                 self.settings = json.load(f)
+            with open(f"{self.dir_name}/RecipeFinder/categories.json", mode="r", encoding="utf-8") as f:
+                self.categories = json.load(f)
         except FileNotFoundError:
+            if self.DEBUG:
+                print("Folders not found! Creating empty structure now.")
             self.settings = {
                 "language": "German"
                 }
-            os.makedirs(f"{self.dir_name}/RecipeFinder/Recipes/Pictures")
+            
+            os.makedirs(f"{self.dir_name}/RecipeFinder/Recipes/Pictures", exist_ok=True)
+            
+            os.makedirs(f"{self.dir_name}/RecipeFinder/Pictograms", exist_ok=True)
             with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="w", encoding="utf-8") as f:
-                self.settings = json.dump(self.settings, f, indent=4)
+                json.dump(self.settings, f, indent=4)
+            self.categories = {
+                "Suppen": ["Soups", "Suppe", "Kürbissuppe", "Tomatensuppe", "Curry"], 
+                "unter 20 Minuten": ["schnell", "fast", "unter 20 Minuten"], 
+                "Nudelgerichte": ["Bratnudeln", "Soba", "Spaghetti", "Pasta", "Nudeln", "Eiernudeln", "Canneloni", "Nudelauflauf", "Capellini", "Farfalle", "Fettucine", "Fusilli", "Gnocchi", "Lasagne", "Linguine", "Maccheroni", "Orecchiette", "Paccheri", "Pappardelle", "Penne", "Ravioli", "Rigatoni", "Spaghettini", "Tagliatelle", "Tortellini", "Tortelloni", "Ramen", "Udon"], 
+                "Aufläufe": ["Lasagne", "Gigantes", "Nudelauflauf"],
+                "Desserts": ["Pudding", "Schokolade", "Marmelade", "Kuchen", "Muffin", "Muffins", "Baumkuchen", "Joghurt", "Pfannkuchen", "Faschingskrapfen"],
+                "Gebratenes": ["Soba", "Bratnudeln", "Gemüsepfanne", "Pfanne", "Pfannkuchen", "Eierkuchen", "Steak", "Braten", "Pommes", "Chicken Nuggets"],
+                "Reisgerichte": ["Reis", "Curry", "Vollkornreis", "Hühnerfrikassee", "Don", "Sushi"],
+                "Feiertagsessen": ["Gänsebraten", "Ente", "Falscher Hase", "Lasagne"]}
+            with open(f"{self.dir_name}/RecipeFinder/categories.json", mode="w", encoding="utf-8") as f:
+                json.dump(self.categories, f, indent=4)
+        self.master = master
+        if self.DEBUG:
+            print("Created Window")
+        
+        if self.DEBUG:
+            print(f"Running in {self.dir_name}")
+        
+        self.master.title("Recipe Finder by Mathilda Braun")
+        self.pictograms = {
+            "Search": f"{self.dir_name}/RecipeFinder/Pictograms/search.svg",
+            "Home": f"{self.dir_name}/RecipeFinder/Pictograms/home.svg",
+            "Add": f"{self.dir_name}/RecipeFinder/Pictograms/add.svg",
+            "Favorite": f"{self.dir_name}/RecipeFinder/Pictograms/favorite.svg",
+            "Noodles": f"{self.dir_name}/RecipeFinder/Pictograms/noodle-bowl.svg",
+            "Recent": f"{self.dir_name}/RecipeFinder/Pictograms/time.svg",
+        }
+
+        for part in self.pictograms:
+            self.pictograms[part] = cairosvg.svg2png(url=self.pictograms[part])
+            image = Image.open(io.BytesIO(self.pictograms[part]))
+            self.pictograms[part] = ImageTk.PhotoImage(image)
+        self.breite = 0
+        self.hoehe = 0
+        
+        
+        self.INTERFACE = tk.Frame(self.master, width=self.breite-150,height=self.hoehe)
+        self.INTERFACE.place(x=0,y=0)
+        
+
+        
+        print(self.dir_name)
+        self.update()
+        
+
+        self.master.attributes('-zoomed', True)
+        if self.DEBUG:
+            print("Maximised the Window succesfully!")
+        
+        
+        
+
+        if self.DEBUG:
+            print(f"Settings Inhalt: {self.settings}")
+            print(f"Categories Inhalt: {len(self.categories)} Kategorien erstellt")
+
+            print(f"Settings: {self.settings}")
+            print(f"Categories: {self.categories}")
+        
+
+        if self.DEBUG:
+            self.INTERFACE.config(bg="green")
 
         sidebars = tk.Canvas(self.master, width=150)
         sidebars.pack(side=tk.RIGHT, fill=tk.Y)
-        search = sidebars.create_text(30, 0, text="Suche",angle=90)
-        home = sidebars.create_text(60, 0, text="Homepage",angle=90)
-        favorits = sidebars.create_text(90, 0, text="Favoriten",angle=90)
-        last = sidebars.create_text(120, 0, text="Zuletzt",angle=90)
-        create = sidebars.create_text(150, 0, text="Erstellen",angle=90)
+        if self.DEBUG:
+            sidebars.config(bg="blue")
+        search = sidebars.create_text(30, 0, text="Suche",angle=90, font=("Arial",16,"bold"), tags="SEARCH")
+        searchP = sidebars.create_image(0, 0, image=self.pictograms["Search"], tags="SEARCH")
+        
+        home = sidebars.create_text(60, 0, text="Homepage",angle=90, font=("Arial",16,"bold"),tags="HOME")
+        homeP = sidebars.create_image(0, 0, image=self.pictograms["Home"],tags="HOME")
+        favorits = sidebars.create_text(90, 0, text="Favoriten",angle=90, font=("Arial",16,"bold"),tags="FAVORITS")
+        favoritsP = sidebars.create_image(0, 0, image=self.pictograms["Favorite"],tags="FAVORITS")
+        last = sidebars.create_text(120, 0, text="Zuletzt",angle=90, font=("Arial",16,"bold"),tags="RECENT")
+        lastP = sidebars.create_image(0, 0, image=self.pictograms["Recent"],tags="RECENT")
+        create = sidebars.create_text(150, 0, text="Erstellen",angle=90, font=("Arial",16,"bold"),tags="CREATE")
+        createP = sidebars.create_image(0, 0, image=self.pictograms["Add"],tags="CREATE")
+
+        sidebars.tag_bind("SEARCH", "<Button-1>", self.Search)
+        sidebars.tag_bind("HOME", "<Button-1>", self.Home)
+        sidebars.tag_bind("FAVORITS", "<Button-1>", self.Favorits)
+        sidebars.tag_bind("RECENT", "<Button-1>", self.Recent)
+        sidebars.tag_bind("CREATE", "<Button-1>", self.Create)
+
+
         def update_position(event):
             neue_hoehe = event.height
+            sidebars.coords(searchP,30-10, neue_hoehe / 2 + 70)
             sidebars.coords(search, 30-10, neue_hoehe / 2)
             sidebars.coords(home, 60-10, neue_hoehe / 2)
+            sidebars.coords(homeP,60-10, neue_hoehe / 2 + 70)
             sidebars.coords(favorits, 90-10, neue_hoehe / 2)
+            sidebars.coords(favoritsP,90-10, neue_hoehe / 2 + 70)
             sidebars.coords(last, 120-10, neue_hoehe / 2)
+            sidebars.coords(lastP,120-10, neue_hoehe / 2 + 70)
             sidebars.coords(create, 150-10, neue_hoehe / 2)
+            sidebars.coords(createP,150-10, neue_hoehe / 2 + 70)
         sidebars.bind("<Configure>", update_position)
 
+        self.selected = "SEARCH"
+
         
+        self.Search()
+
+    
+    def update(self):
+        self.master.update_idletasks()
+        self.breite = self.master.winfo_width()
+        self.hoehe = self.master.winfo_height()
+
+        self.INTERFACE.place(
+            x=0,
+            y=0,
+            width=self.breite - 150,
+            height=self.hoehe
+        )
+
+        #if self.DEBUG:
+            #print(self.breite, self.hoehe)
+
+        self.master.after(20, self.update)
+
+    def Search(self, event=None):
+        for widget in self.INTERFACE.winfo_children():
+            widget.destroy()
+        if self.DEBUG:
+            print("SEARCH")
+        self.search_var = tk.StringVar(value="Suche ein Rezept")
+        self.searchEntry = ttk.Entry(self.INTERFACE, textvariable=self.search_var)
+        self.searchEntry.grid(row=0, column=0, sticky="ew")
+        original_img = cairosvg.svg2png(url=f"{self.dir_name}/RecipeFinder/Pictograms/search.svg")
+        original_img = Image.open(io.BytesIO(original_img))
+        
+        
+        # 2. Größe ändern (z. B. auf 16x16 Pixel)
+
+        original_img= original_img.resize((16, 16)) 
+        self.pictograms["Small_Search"]  = ImageTk.PhotoImage(original_img)
+        searchimagecanvas = tk.Canvas(self.INTERFACE, width=20, height=20)
+        searchimagecanvas.place(x="63.15c",y=0)
+        searchimagecanvas.create_image(0,0,anchor="nw",image=self.pictograms["Small_Search"])
+        searchimagecanvas.bind("<Button-1>", self.doTheSearch)
+        if self.DEBUG:
+            searchimagecanvas.config(bg="orange")
+        
+            self.searchEntry.config(background="red")
+        self.INTERFACE.grid_columnconfigure(0, weight=1)
+
+        buttonFrame = tk.Frame(self.INTERFACE)
+        if self.DEBUG:
+            buttonFrame.config(background="yellow")
+        buttonFrame.grid(row=1, column=0)
+
+        placecolumn = 0
+        placerow = 1
+        categoriebuttons = {}
+        for category in self.categories:
+            if self.DEBUG:
+                print(category)
+            if category == "Nudelgerichte":
+                picture = self.pictograms["Noodles"]
+            else:
+                picture = ""
+            categoriebuttons[f"{category}"] = ttk.Button(buttonFrame, text=f"{category}", image = picture, padding=15, compound="right")
+            categoriebuttons[f"{category}"].grid(row=placerow, column=placecolumn, padx=15, pady=20)
+            placecolumn += 1
+            if placecolumn == 2:
+                placecolumn = 0
+                placerow += 1
+        if self.DEBUG:
+            print(f"Buttons: {categoriebuttons}")
+
+            
+
+    
+
+    
+    def doTheSearch(self, event=None):
+        if self.DEBUG:
+            print(f"Searching for '{self.searchEntry.get()}'")
 
 
+    def Home(self, event=None):
+        for widget in self.INTERFACE.winfo_children():
+            widget.destroy()
+        if self.DEBUG:
+            print("HOME")
 
+    def Favorits(self, event=None):
+        for widget in self.INTERFACE.winfo_children():
+            widget.destroy()
+        if self.DEBUG:
+            print("FAVORITS")
+    
+    def Favorits(self, event=None):
+        for widget in self.INTERFACE.winfo_children():
+            widget.destroy()
+        if self.DEBUG:
+            print("FAVORITS")
+
+    def Recent(self, event=None):
+        for widget in self.INTERFACE.winfo_children():
+            widget.destroy()
+        if self.DEBUG:
+            print("RECENT")
+
+    def Create(self, event=None):
+        for widget in self.INTERFACE.winfo_children():
+            widget.destroy()
+        if self.DEBUG:
+            print("CREATE")
 
     def run(self):
         self.master.mainloop()
