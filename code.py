@@ -4,6 +4,7 @@ import json, os
 from PIL import Image, ImageTk
 import cairosvg # type: ignore
 import io
+from tkinter import messagebox, simpledialog
 
 class RecipeFinder:
     def __init__(self, master):
@@ -19,6 +20,8 @@ class RecipeFinder:
                 self.settings = json.load(f)
             with open(f"{self.dir_name}/RecipeFinder/categories.json", mode="r", encoding="utf-8") as f:
                 self.categories = json.load(f)
+            with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="r", encoding="utf-8") as f:
+                self.ingredients = json.load(f)
         except FileNotFoundError:
             if self.DEBUG:
                 print("Folders not found! Creating empty structure now.")
@@ -27,7 +30,10 @@ class RecipeFinder:
                 }
             
             os.makedirs(f"{self.dir_name}/RecipeFinder/Recipes/Pictures", exist_ok=True)
-            
+            os.makedirs(f"{self.dir_name}/RecipeFinder/Ingredients", exist_ok=True)
+            with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
+                self.ingredients = {}
+                json.dump(self.ingredients, f)
             os.makedirs(f"{self.dir_name}/RecipeFinder/Pictograms", exist_ok=True)
             with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="w", encoding="utf-8") as f:
                 json.dump(self.settings, f, indent=4)
@@ -239,10 +245,56 @@ class RecipeFinder:
             print("RECENT")
 
     def Create(self, event=None):
+        # 1. Die StringVar definieren
+        self.search_var = tk.StringVar()
+
+        def checkIfMatching(*args):
+            for item in self.tree.get_children():
+                self.tree.delete(item)
+                
+            self.matchingIngredients = {}
+            search_term = self.search_var.get().lower()
+
+            for part, category in self.ingredients.items():
+                if search_term in part.lower():
+                    self.matchingIngredients[part] = category
+            for name, kategorie in self.matchingIngredients.items():
+                self.tree.insert("", "end", values=(name, kategorie))
+
+        def askForCategory():
+            name = self.search_var.get()
+            category = simpledialog.askstring("Kategorie", f"Welcher Kategorie würdest du {name} zuordnen?")
+            if category:
+                self.ingredients[name] = category
+                checkIfMatching()
+
+                with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
+                    json.dump(self.ingredients, f, ensure_ascii=False)
+
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
-        if self.DEBUG:
-            print("CREATE")
+
+        
+        self.addIngredient = ttk.Entry(self.INTERFACE, width=50, textvariable=self.search_var)
+        self.addIngredient.grid(row=0, column=1)
+
+        
+        self.search_var.trace_add("write", checkIfMatching)
+
+        
+        self.tree = ttk.Treeview(self.INTERFACE, columns=("Name", "Kategorie"), show="headings")
+        self.tree.heading("Name", text="Name")
+        self.tree.heading("Kategorie", text="Kategorie")
+        self.tree.grid(pady=20, padx=0, row=1, column=1)
+
+        
+        checkIfMatching()
+
+        AddCategory = ttk.Button(self.INTERFACE, text="Zutat hinzufügen", image=self.pictograms["Add"], compound="left", command=askForCategory)
+        AddCategory.grid(row=2, column=1)
+
+
+        
 
     def run(self):
         self.master.mainloop()
