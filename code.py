@@ -11,6 +11,8 @@ class RecipeFinder:
     def __init__(self, master):
 
         self.DEBUG = False
+        self.standart_color = "#117a91"
+        self.highlight_color = "#145563"
         self.dir_name = os.path.dirname(os.path.realpath(__file__))
         try:
             #dummy
@@ -372,11 +374,19 @@ class RecipeFinder:
 
         tk.Label(recipeframe, text="Bild hinzufügen", image=self.pictograms[3], compound="left").grid(row=2, column=0)
         addimagebutton = ttk.Button(recipeframe, text="Bild hinzufügen", image=self.pictograms["Image"], compound="left", command=askforImage)
-        addimagebutton.grid(row=2,column=1)
+        addimagebutton.grid(row=2,column=1, pady=20)
 
-        tk.Label(recipeframe, text="Speichern", image=self.pictograms[4], compound="left").grid(row=3, column=0, padx=40, pady=20)
+        tk.Label(recipeframe, text="Kategorie hinzufügen", image=self.pictograms[4], compound="left").grid(row=3, column=0)
+        self.Listbox = tk.Listbox(recipeframe, highlightthickness=0, selectbackground=self.standart_color, activestyle="none", width=40)
+        self.Listbox.grid(row=3, column=1)
+
+        tk.Label(recipeframe, text="Speichern", image=self.pictograms[5], compound="left").grid(row=4, column=0, padx=40, pady=20)
         saveButton = ttk.Button(recipeframe, text="Speichern", image=self.pictograms["Save"], compound="left", command=save)
-        saveButton.grid(row=3, column=1)
+        saveButton.grid(row=4, column=1)
+
+        for category in self.categories:
+            category = category.center(70)
+            self.Listbox.insert(tk.END, category)
 
     def run(self):
         self.master.mainloop()
