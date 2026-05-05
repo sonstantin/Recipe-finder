@@ -71,6 +71,7 @@ class RecipeFinder:
             4: f"{self.dir_name}/RecipeFinder/Pictograms/number--small--4.svg",
             5: f"{self.dir_name}/RecipeFinder/Pictograms/number--small--5.svg",
             "Notification": f"{self.dir_name}/RecipeFinder/Pictograms/important.svg",
+            "Save": f"{self.dir_name}/RecipeFinder/Pictograms/save.svg",
         }
 
         for part in self.pictograms:
@@ -220,8 +221,31 @@ class RecipeFinder:
 
             
 
-    
+        
 
+    def openRecipe(self, recipe):
+        for widget in self.INTERFACE.winfo_children():
+            widget.destroy()
+        if self.DEBUG:
+            print("RECIPE")
+        img = tk.PhotoImage(file=f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{recipe}.png")
+
+        # 2. Label erstellen und Bild zuweisen
+        label = tk.Label(self.INTERFACE, image=img)
+        label.pack()
+
+        # WICHTIG: Referenz behalten! 
+        # In Funktionen löscht Python das Bild aus dem Speicher, wenn man es nicht explizit speichert:
+        label.image = img 
+
+        try:
+            with open(f"{self.dir_name}/RecipeFinder/Recipes/{recipe}.json", mode="r",encoding="utf-8") as f:
+                text = json.load(f)
+        except FileNotFoundError:
+            messagebox.showerror("Fehler", "Ein unerwarteter Fehler ist aufgetreten! Bitte melde das den Entwicklern auf\n https://github.com/sonstantin/Recipe-finder-by-Mathilda/issues")
+
+        tk.Label(self.INTERFACE, text=text["Title"], font=("Arial", 14, "bold")).pack()
+        tk.Label(self.INTERFACE, text=text["Description"], pady=10).pack()
     
     def doTheSearch(self, event=None):
         if self.DEBUG:
@@ -273,17 +297,21 @@ class RecipeFinder:
                 self.tree.insert("", "end", values=(name, kategorie), text=f"{name}")
             
         def askforImage():
-            image = filedialog.askopenfilename(filetypes=[("Bilder im PNG-Format", "*.png")])
+            self.image = filedialog.askopenfilename(filetypes=[("Bilder im PNG-Format", "*.png")])
 
             
-            ziel = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{self.NewRecipeTitle.get()}.png"
+            
 
-            # Datei binär lesen und am Ziel mit neuem Namen schreiben
-            with open(image, 'rb') as f_src:
-                with open(ziel, 'wb') as f_dst:
+        def save():
+            
+            self.ziel = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{self.NewRecipeTitle.get()}.png"
+            with open(self.image, 'rb') as f_src:
+                with open(self.ziel, 'wb') as f_dst:
                     f_dst.write(f_src.read())
 
-            print(f"Datei erfolgreich nach {ziel} kopiert.")
+            with open(f"{self.dir_name}/RecipeFinder/Recipes/{self.NewRecipeTitle.get()}.json", mode="w", encoding="utf-8") as f:
+                json.dump({"Title": f"{self.NewRecipeTitle.get()}", "Description": f"{self.NewRecipe.get(1.0, "end")}"}, f, indent=4,ensure_ascii=False)
+            self.openRecipe(recipe=self.NewRecipeTitle.get())
         def askForCategory():
             selected_item = self.tree.focus()
             print(f"Test{self.tree.item(selected_item)}")
@@ -318,6 +346,8 @@ class RecipeFinder:
         self.tree.heading("Kategorie", text="Kategorie")
         self.tree.grid(pady=20, padx=0, row=1, column=1)
 
+
+
         
         checkIfMatching()
         
@@ -343,6 +373,10 @@ class RecipeFinder:
         tk.Label(recipeframe, text="Bild hinzufügen", image=self.pictograms[3], compound="left").grid(row=2, column=0)
         addimagebutton = ttk.Button(recipeframe, text="Bild hinzufügen", image=self.pictograms["Image"], compound="left", command=askforImage)
         addimagebutton.grid(row=2,column=1)
+
+        tk.Label(recipeframe, text="Speichern", image=self.pictograms[4], compound="left").grid(row=3, column=0, padx=40, pady=20)
+        saveButton = ttk.Button(recipeframe, text="Speichern", image=self.pictograms["Save"], compound="left", command=save)
+        saveButton.grid(row=3, column=1)
 
     def run(self):
         self.master.mainloop()
