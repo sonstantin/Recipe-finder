@@ -4,7 +4,8 @@ import json, os
 from PIL import Image, ImageTk
 import cairosvg # type: ignore
 import io
-from tkinter import messagebox, simpledialog
+from tkinter import messagebox, simpledialog,filedialog
+
 
 class RecipeFinder:
     def __init__(self, master):
@@ -63,6 +64,13 @@ class RecipeFinder:
             "Favorite": f"{self.dir_name}/RecipeFinder/Pictograms/favorite.svg",
             "Noodles": f"{self.dir_name}/RecipeFinder/Pictograms/noodle-bowl.svg",
             "Recent": f"{self.dir_name}/RecipeFinder/Pictograms/time.svg",
+            "Image": f"{self.dir_name}/RecipeFinder/Pictograms/image.svg",
+            1: f"{self.dir_name}/RecipeFinder/Pictograms/number--small--1.svg",
+            2: f"{self.dir_name}/RecipeFinder/Pictograms/number--small--2.svg",
+            3: f"{self.dir_name}/RecipeFinder/Pictograms/number--small--3.svg",
+            4: f"{self.dir_name}/RecipeFinder/Pictograms/number--small--4.svg",
+            5: f"{self.dir_name}/RecipeFinder/Pictograms/number--small--5.svg",
+            "Notification": f"{self.dir_name}/RecipeFinder/Pictograms/important.svg",
         }
 
         for part in self.pictograms:
@@ -247,8 +255,11 @@ class RecipeFinder:
     def Create(self, event=None):
         # 1. Die StringVar definieren
         self.search_var = tk.StringVar()
-
+        self.RecipeIngredients = {}
         def checkIfMatching(*args):
+            selected_item = self.tree.focus()
+            print(f"Test{self.tree.item(selected_item)}")
+            print(selected_item)
             for item in self.tree.get_children():
                 self.tree.delete(item)
                 
@@ -259,42 +270,79 @@ class RecipeFinder:
                 if search_term in part.lower():
                     self.matchingIngredients[part] = category
             for name, kategorie in self.matchingIngredients.items():
-                self.tree.insert("", "end", values=(name, kategorie))
+                self.tree.insert("", "end", values=(name, kategorie), text=f"{name}")
+            
+        def askforImage():
+            image = filedialog.askopenfilename(filetypes=[("Bilder im PNG-Format", "*.png")])
 
+            
+            ziel = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{self.NewRecipeTitle.get()}.png"
+
+            # Datei binär lesen und am Ziel mit neuem Namen schreiben
+            with open(image, 'rb') as f_src:
+                with open(ziel, 'wb') as f_dst:
+                    f_dst.write(f_src.read())
+
+            print(f"Datei erfolgreich nach {ziel} kopiert.")
         def askForCategory():
-            name = self.search_var.get()
-            category = simpledialog.askstring("Kategorie", f"Welcher Kategorie würdest du {name} zuordnen?")
-            if category:
-                self.ingredients[name] = category
-                checkIfMatching()
+            selected_item = self.tree.focus()
+            print(f"Test{self.tree.item(selected_item)}")
+            selected_item = self.tree.item(selected_item)["text"]
+            print(selected_item)
+            newIngredient = selected_item
+                
+            if not newIngredient:
+                name = self.search_var.get()
+                category = simpledialog.askstring("Kategorie", f"Welcher Kategorie würdest du {name} zuordnen?")
+                if category:
+                    self.ingredients[name] = category
+                    checkIfMatching()
 
-                with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
-                    json.dump(self.ingredients, f, ensure_ascii=False)
+                    with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
+                        json.dump(self.ingredients, f, ensure_ascii=False)
 
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
 
-        
-        self.addIngredient = ttk.Entry(self.INTERFACE, width=50, textvariable=self.search_var)
+        recipeframe = tk.Frame(self.INTERFACE)
+        ingredientframe = tk.Frame(self.INTERFACE)
+        self.addIngredient = ttk.Entry(ingredientframe, width=50, textvariable=self.search_var)
         self.addIngredient.grid(row=0, column=1)
 
         
         self.search_var.trace_add("write", checkIfMatching)
 
         
-        self.tree = ttk.Treeview(self.INTERFACE, columns=("Name", "Kategorie"), show="headings")
+        self.tree = ttk.Treeview(ingredientframe, columns=("Name", "Kategorie"), show="headings")
         self.tree.heading("Name", text="Name")
         self.tree.heading("Kategorie", text="Kategorie")
         self.tree.grid(pady=20, padx=0, row=1, column=1)
 
         
         checkIfMatching()
-
-        AddCategory = ttk.Button(self.INTERFACE, text="Zutat hinzufügen", image=self.pictograms["Add"], compound="left", command=askForCategory)
+        
+        
+        if self.DEBUG:
+            recipeframe.config(bg="yellow")
+            ingredientframe.config(bg="grey")
+        recipeframe.grid(row=0, column=0)
+        ingredientframe.grid(row=0, column=1)
+        AddCategory = ttk.Button(ingredientframe, text="Zutat hinzufügen", image=self.pictograms["Add"], compound="left", command=askForCategory)
         AddCategory.grid(row=2, column=1)
 
 
-        
+        self.NewRecipeTitle = tk.Entry(recipeframe, width=40)
+        self.NewRecipeTitle.grid(row=0,column=1, padx=40, pady=20)
+        tk.Label(recipeframe, text="Titel eingeben", image=self.pictograms[1], compound="left").grid(row=0, column=0, padx=40,pady=20)
+
+
+        tk.Label(recipeframe, text="Rezept eingeben", image=self.pictograms[2], compound="left").grid(row=1, column=0, padx=40,pady=20)
+        self.NewRecipe = tk.Text(recipeframe, width=40, height=40)
+        self.NewRecipe.grid(row=1,column=1, padx=40,pady=20)
+
+        tk.Label(recipeframe, text="Bild hinzufügen", image=self.pictograms[3], compound="left").grid(row=2, column=0)
+        addimagebutton = ttk.Button(recipeframe, text="Bild hinzufügen", image=self.pictograms["Image"], compound="left", command=askforImage)
+        addimagebutton.grid(row=2,column=1)
 
     def run(self):
         self.master.mainloop()
