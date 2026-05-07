@@ -87,7 +87,7 @@ class RecipeFinder:
         self.INTERFACE = tk.Frame(self.master, width=self.breite-150,height=self.hoehe)
         self.INTERFACE.place(x=0,y=0)
         
-
+        self.recipes = {}
         
         print(self.dir_name)
         self.update()
@@ -134,6 +134,7 @@ class RecipeFinder:
         sidebars.tag_bind("CREATE", "<Button-1>", self.Create)
 
 
+        
         def update_position(event):
             neue_hoehe = event.height
             sidebars.coords(searchP,30-10, neue_hoehe / 2 + 70)
@@ -149,8 +150,8 @@ class RecipeFinder:
         sidebars.bind("<Configure>", update_position)
 
         self.selected = "SEARCH"
-
         
+        self.recipes = {}
         self.Search()
 
     
@@ -265,10 +266,43 @@ class RecipeFinder:
             widget.destroy()
         if self.DEBUG:
             print("FAVORITS")
-    
+    def opencategorie(self, categorie):
+        
+        for widget in self.INTERFACE.winfo_children():
+            widget.destroy()
+        if self.DEBUG:
+            print("OPEN CATEGORY")
+
+        alle_dateien = []
+        for root, dirs, files in os.walk(f'{self.dir_name}/RecipeFinder/Recipes'):
+            for file in files:
+                alle_dateien.append(os.path.join(root, file))
+                if "Pictures" in alle_dateien[-1]:
+                    alle_dateien.pop()
+
+        if self.DEBUG:
+            print(alle_dateien)
+
+        self.recipes[f"{categorie}"] = []
+        for data in alle_dateien:
+            with open(f"{data}", mode="r", encoding="utf-8") as f:
+                JSONData = json.load(f)
+            if JSONData["Category"].replace("                                ", "") == categorie:
+                JSONData["Category"] = JSONData["Category"].replace("                                ", "")
+                self.recipes[f"{categorie}"].append(JSONData)
+        #Example Data
+        #{
+            #"Title": "Ramen",
+            #"Description": "xyz\n",
+            #"Category": "                                Suppen                                "
+        #}
+
+        if self.DEBUG:
+            print(JSONData)
     def Favorits(self, event=None):
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
+        
         if self.DEBUG:
             print("FAVORITS")
 
@@ -303,16 +337,19 @@ class RecipeFinder:
 
             
             
+        
+
 
         def save():
-            
+            index = self.Listbox.curselection()
+            category = self.Listbox.get(index)
             self.ziel = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{self.NewRecipeTitle.get()}.png"
             with open(self.image, 'rb') as f_src:
                 with open(self.ziel, 'wb') as f_dst:
                     f_dst.write(f_src.read())
 
             with open(f"{self.dir_name}/RecipeFinder/Recipes/{self.NewRecipeTitle.get()}.json", mode="w", encoding="utf-8") as f:
-                json.dump({"Title": f"{self.NewRecipeTitle.get()}", "Description": f"{self.NewRecipe.get(1.0, "end")}"}, f, indent=4,ensure_ascii=False)
+                json.dump({"Title": f"{self.NewRecipeTitle.get()}", "Description": f"{self.NewRecipe.get(1.0, "end")}", "Category": f"{category.replace(" ", "")}"}, f, indent=4,ensure_ascii=False)
             self.openRecipe(recipe=self.NewRecipeTitle.get())
         def askForCategory():
             selected_item = self.tree.focus()
@@ -320,7 +357,8 @@ class RecipeFinder:
             selected_item = self.tree.item(selected_item)["text"]
             print(selected_item)
             newIngredient = selected_item
-                
+            
+            
             if not newIngredient:
                 name = self.search_var.get()
                 category = simpledialog.askstring("Kategorie", f"Welcher Kategorie würdest du {name} zuordnen?")
