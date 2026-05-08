@@ -153,7 +153,7 @@ class RecipeFinder:
         
         self.recipes = {}
         self.Search()
-
+        self.images = {}
     
     def update(self):
         self.master.update_idletasks()
@@ -213,7 +213,7 @@ class RecipeFinder:
                 picture = self.pictograms["Noodles"]
             else:
                 picture = ""
-            categoriebuttons[f"{category}"] = ttk.Button(buttonFrame, text=f"{category}", image = picture, padding=15, compound="right")
+            categoriebuttons[f"{category}"] = ttk.Button(buttonFrame, text=f"{category}", image = picture, padding=15, compound="right", command=lambda categorie=category: self.opencategorie(categorie=categorie))
             categoriebuttons[f"{category}"].grid(row=placerow, column=placecolumn, padx=15, pady=20)
             placecolumn += 1
             if placecolumn == 2:
@@ -296,9 +296,46 @@ class RecipeFinder:
             #"Description": "xyz\n",
             #"Category": "                                Suppen                                "
         #}
+        self.DEBUG = True
+        if self.DEBUG:
+            print(f"{JSONData}")
+            print(f"{self.recipes}")
+
+        
+        self.categoriecanvas = tk.Canvas(self.INTERFACE)
+
 
         if self.DEBUG:
-            print(JSONData)
+            self.categoriecanvas.config(bg="yellow", width=self.breite-170, height=self.hoehe)
+
+        # 1. Canvas an die Scrollbar koppeln
+        self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="vertical", command=self.categoriecanvas.yview)
+        self.categoriecanvas.configure(yscrollcommand=self.scrollbar.set)
+
+        # 2. Layout (Reihenfolge beachten: Scrollbar oft zuerst packen)
+        self.scrollbar.pack(side="right", fill="y")
+        self.categoriecanvas.pack(side="left", fill="both", expand=True)
+
+        # 3. WICHTIG: Die Scrollregion definieren
+        # Sobald du Inhalte in das Canvas zeichnest, musst du sagen, wie groß der Bereich ist:
+        self.categoriecanvas.bind("<Configure>", lambda e: self.categoriecanvas.configure(scrollregion=self.categoriecanvas.bbox("all")))
+        
+        self.scroll_frame = tk.Frame(self.categoriecanvas)
+        self.categoriecanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
+
+        row = 0
+        column = 0
+        
+        for recipe in self.recipes[f"{categorie}"]:
+            self.images[f"{recipe["Title"]}"] = tk.PhotoImage(file=f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{recipe["Title"]}.png")
+
+            Frame = tk.Frame(self.scroll_frame, relief="solid", borderwidth=1)
+            Frame.grid(row=row, column=column)
+
+            tk.Button(Frame, image=self.images[f"{recipe["Title"]}"], command=lambda recipe=recipe["Title"]: self.openRecipe(recipe=recipe)).pack()
+            tk.Button(Frame, text=f"{recipe["Title"]}", font=("Arial", 14, "bold"), command=lambda recipe=recipe["Title"]: self.openRecipe(recipe=recipe)).pack()
+
+
     def Favorits(self, event=None):
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
