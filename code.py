@@ -296,7 +296,7 @@ class RecipeFinder:
             #"Description": "xyz\n",
             #"Category": "                                Suppen                                "
         #}
-        self.DEBUG = True
+        
         if self.DEBUG:
             print(f"{JSONData}")
             print(f"{self.recipes}")
@@ -335,6 +335,10 @@ class RecipeFinder:
             tk.Button(Frame, image=self.images[f"{recipe["Title"]}"], command=lambda recipe=recipe["Title"]: self.openRecipe(recipe=recipe)).pack()
             tk.Button(Frame, text=f"{recipe["Title"]}", font=("Arial", 14, "bold"), command=lambda recipe=recipe["Title"]: self.openRecipe(recipe=recipe)).pack()
 
+            column += 1
+            if column == 3:
+                column = 0
+                row += 1
 
     def Favorits(self, event=None):
         for widget in self.INTERFACE.winfo_children():
