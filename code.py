@@ -74,6 +74,7 @@ class RecipeFinder:
             5: f"{self.dir_name}/RecipeFinder/Pictograms/number--small--5.svg",
             "Notification": f"{self.dir_name}/RecipeFinder/Pictograms/important.svg",
             "Save": f"{self.dir_name}/RecipeFinder/Pictograms/save.svg",
+            "Ingredient": f"{self.dir_name}/RecipeFinder/Pictograms/strawberry.svg",
         }
 
         for part in self.pictograms:
@@ -122,15 +123,15 @@ class RecipeFinder:
         homeP = sidebars.create_image(0, 0, image=self.pictograms["Home"],tags="HOME")
         favorits = sidebars.create_text(90, 0, text="Favoriten",angle=90, font=("Arial",16,"bold"),tags="FAVORITS")
         favoritsP = sidebars.create_image(0, 0, image=self.pictograms["Favorite"],tags="FAVORITS")
-        last = sidebars.create_text(120, 0, text="Zuletzt",angle=90, font=("Arial",16,"bold"),tags="RECENT")
-        lastP = sidebars.create_image(0, 0, image=self.pictograms["Recent"],tags="RECENT")
+        last = sidebars.create_text(120, 0, text="Zutaten",angle=90, font=("Arial",16,"bold"),tags="INGREDIENTS")
+        lastP = sidebars.create_image(0, 0, image=self.pictograms["Ingredient"],tags="INGREDIENTS")
         create = sidebars.create_text(150, 0, text="Erstellen",angle=90, font=("Arial",16,"bold"),tags="CREATE")
         createP = sidebars.create_image(0, 0, image=self.pictograms["Add"],tags="CREATE")
 
         sidebars.tag_bind("SEARCH", "<Button-1>", self.Search)
         sidebars.tag_bind("HOME", "<Button-1>", self.Home)
         sidebars.tag_bind("FAVORITS", "<Button-1>", self.Favorits)
-        sidebars.tag_bind("RECENT", "<Button-1>", self.Recent)
+        sidebars.tag_bind("INGREDIENTS", "<Button-1>", self.Ingredients)
         sidebars.tag_bind("CREATE", "<Button-1>", self.Create)
 
 
@@ -347,11 +348,11 @@ class RecipeFinder:
         if self.DEBUG:
             print("FAVORITS")
 
-    def Recent(self, event=None):
+    def Ingredients(self, event=None):
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
         if self.DEBUG:
-            print("RECENT")
+            print("INGREDIENTS")
 
     def Create(self, event=None):
         # 1. Die StringVar definieren
