@@ -232,10 +232,23 @@ class RecipeFinder:
             widget.destroy()
         if self.DEBUG:
             print("RECIPE")
+
+
         img = tk.PhotoImage(file=f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{recipe}.png")
+        self.recipecanvas = tk.Canvas(self.INTERFACE)
+        self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="vertical", command=self.recipecanvas.yview)
+        self.recipecanvas.configure(yscrollcommand=self.scrollbar.set)
+        
+
+        
+        self.scrollbar.pack(side="right", fill="y")
+        self.recipecanvas.pack(side="left", fill="both", expand=True)
+
+        self.scroll_frame = tk.Frame(self.recipecanvas)
+        self.recipecanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
 
         # 2. Label erstellen und Bild zuweisen
-        label = tk.Label(self.INTERFACE, image=img)
+        label = tk.Label(self.scroll_frame, image=img)
         label.pack()
 
         # WICHTIG: Referenz behalten! 
@@ -248,8 +261,10 @@ class RecipeFinder:
         except FileNotFoundError:
             messagebox.showerror("Fehler", "Ein unerwarteter Fehler ist aufgetreten! Bitte melde das den Entwicklern auf\n https://github.com/sonstantin/Recipe-finder-by-Mathilda/issues")
 
-        tk.Label(self.INTERFACE, text=text["Title"], font=("Arial", 14, "bold")).pack()
-        tk.Label(self.INTERFACE, text=text["Description"], pady=10).pack()
+        tk.Label(self.scroll_frame, text=text["Title"], font=("Arial", 14, "bold")).pack()
+        tk.Label(self.scroll_frame, text=text["Description"], pady=10).pack()
+
+        
     
     def doTheSearch(self, event=None):
         if self.DEBUG:
@@ -267,8 +282,21 @@ class RecipeFinder:
             widget.destroy()
         if self.DEBUG:
             print("FAVORITS")
+    def get_resized_photo(self, img_original, current_width):
+            new_width = int(current_width / 3)
+            new_width = max(new_width, 50) # Mindestbreite
+            
+            aspect = img_original.height / img_original.width
+            new_height = int(new_width * aspect)
+            
+            resized = img_original.resize((new_width, new_height), Image.Resampling.LANCZOS)
+            return ImageTk.PhotoImage(resized)
     def opencategorie(self, categorie):
         
+        
+        
+
+        # Widgets leeren
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
         if self.DEBUG:
@@ -304,42 +332,53 @@ class RecipeFinder:
 
         
         self.categoriecanvas = tk.Canvas(self.INTERFACE)
-
-
-        if self.DEBUG:
-            self.categoriecanvas.config(bg="yellow", width=self.breite-170, height=self.hoehe)
-
-        # 1. Canvas an die Scrollbar koppeln
         self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="vertical", command=self.categoriecanvas.yview)
         self.categoriecanvas.configure(yscrollcommand=self.scrollbar.set)
+        
 
-        # 2. Layout (Reihenfolge beachten: Scrollbar oft zuerst packen)
+        
         self.scrollbar.pack(side="right", fill="y")
         self.categoriecanvas.pack(side="left", fill="both", expand=True)
 
-        # 3. WICHTIG: Die Scrollregion definieren
-        # Sobald du Inhalte in das Canvas zeichnest, musst du sagen, wie groß der Bereich ist:
-        self.categoriecanvas.bind("<Configure>", lambda e: self.categoriecanvas.configure(scrollregion=self.categoriecanvas.bbox("all")))
-        
         self.scroll_frame = tk.Frame(self.categoriecanvas)
         self.categoriecanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
 
-        row = 0
-        column = 0
-        
+        # WICHTIG: Speicher für Originalbilder und Button-Referenzen
+        self.recipe_assets = {} # Speichert { "Titel": [OriginalImage, ButtonWidget] }
+
+        row, column = 0, 0
+        # Aktuelle Breite für die Erstberechnung holen
+        current_ui_width = self.INTERFACE.winfo_width() 
+        if current_ui_width < 100: current_ui_width = self.breite # Fallback falls noch nicht gerendert
+
         for recipe in self.recipes[f"{categorie}"]:
-            self.images[f"{recipe["Title"]}"] = tk.PhotoImage(file=f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{recipe["Title"]}.png")
+            title = recipe["Title"]
+            img_path = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{title}.png"
+            
+            # 1. Original laden und im Speicher behalten
+            orig = Image.open(img_path)
+            photo = self.get_resized_photo(orig, current_ui_width)
+            
+            # 2. UI Elemente erstellen
+            frame = tk.Frame(self.scroll_frame, relief="solid", borderwidth=1)
+            frame.grid(row=row, column=column, padx=5, pady=5)
 
-            Frame = tk.Frame(self.scroll_frame, relief="solid", borderwidth=1)
-            Frame.grid(row=row, column=column)
+            btn_img = tk.Button(frame, image=photo, command=lambda t=title: self.openRecipe(recipe=t))
+            btn_img.pack()
+            # Referenz im Button-Objekt speichern gegen Garbage Collection
+            btn_img.image = photo 
+            
+            tk.Button(frame, text=title, font=("Arial", 14, "bold"), command=lambda t=title: self.openRecipe(recipe=t)).pack()
 
-            tk.Button(Frame, image=self.images[f"{recipe["Title"]}"], command=lambda recipe=recipe["Title"]: self.openRecipe(recipe=recipe)).pack()
-            tk.Button(Frame, text=f"{recipe["Title"]}", font=("Arial", 14, "bold"), command=lambda recipe=recipe["Title"]: self.openRecipe(recipe=recipe)).pack()
+            # 3. Für späteres Resizing registrieren
+            self.recipe_assets[title] = [orig, btn_img]
 
             column += 1
             if column == 3:
                 column = 0
                 row += 1
+
+    
 
     def Favorits(self, event=None):
         for widget in self.INTERFACE.winfo_children():
