@@ -99,7 +99,14 @@ class RecipeFinder:
         if self.DEBUG:
             print("Maximised the Window succesfully!")
         
-        
+        def toggleDEBUG(event=None):
+            print("Debug")
+            if self.DEBUG == False:
+                self.DEBUG = True
+            else:
+                self.DEBUG = False
+
+            self.Search()
         
 
         if self.DEBUG:
@@ -135,6 +142,9 @@ class RecipeFinder:
         sidebars.tag_bind("INGREDIENTS", "<Button-1>", self.Ingredients)
         sidebars.tag_bind("CREATE", "<Button-1>", self.Create)
 
+        self.master.bind("<Control-Alt-d>", toggleDEBUG)
+
+        
 
         
         def update_position(event):
@@ -429,6 +439,89 @@ class RecipeFinder:
             widget.destroy()
         if self.DEBUG:
             print("FAVORITS")
+        
+        
+        tk.Label(self.INTERFACE, text="Deine Favoriten:", font=("Arial", 15, "bold")).pack()
+
+        alle_dateien = []
+        path = f'{self.dir_name}/RecipeFinder/Recipes'
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                full_path = os.path.join(root, file)
+                if "Pictures" not in full_path:
+                    alle_dateien.append(full_path)
+
+        # 3. Rezepte filtern, deren Titel den Suchbegriff enthält
+        found_recipes = []
+        for data in alle_dateien:
+            try:
+                with open(data, mode="r", encoding="utf-8") as f:
+                    JSONData = json.load(f)
+                
+                # Suche im Titel (Case-Insensitive)
+                if JSONData["Liked"] == True:
+                    # Bereinigung der Kategorie wie im Original
+                    
+                    found_recipes.append(JSONData)
+            except Exception as e:
+                if self.DEBUG: print(f"Fehler beim Laden von {data}: {e}")
+
+        if self.DEBUG:
+            print(found_recipes)
+
+        self.categoriecanvas = tk.Canvas(self.INTERFACE)
+        self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="vertical", command=self.categoriecanvas.yview)
+        self.categoriecanvas.configure(yscrollcommand=self.scrollbar.set)
+        
+
+        
+        self.scrollbar.pack(side="right", fill="y")
+        self.categoriecanvas.pack(side="left", fill="both", expand=True)
+
+        self.scroll_frame = tk.Frame(self.categoriecanvas)
+        self.categoriecanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
+
+        # WICHTIG: Speicher für Originalbilder und Button-Referenzen
+        self.recipe_assets = {} # Speichert { "Titel": [OriginalImage, ButtonWidget] }
+
+        row, column = 0, 0
+        # Aktuelle Breite für die Erstberechnung holen
+        current_ui_width = self.INTERFACE.winfo_width() 
+        if current_ui_width < 100: current_ui_width = self.breite # Fallback falls noch nicht gerendert
+
+        for recipe in found_recipes:
+            title = recipe["Title"]
+            img_path = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{title}.png"
+            
+            # 1. Original laden und im Speicher behalten
+            orig = Image.open(img_path)
+            photo = self.get_resized_photo(orig, current_ui_width)
+            
+            # 2. UI Elemente erstellen
+            frame = tk.Frame(self.scroll_frame, relief="solid", borderwidth=1)
+            frame.grid(row=row, column=column, padx=5, pady=5)
+
+            
+
+            btn_img = tk.Button(frame, image=photo, command=lambda t=title: self.openRecipe(recipe=t))
+            btn_img.pack()
+            # Referenz im Button-Objekt speichern gegen Garbage Collection
+            btn_img.image = photo 
+            
+            tk.Button(frame, text=title, font=("Arial", 14, "bold"), command=lambda t=title: self.openRecipe(recipe=t)).pack()
+            if recipe["Liked"] == True:
+                tk.Button(frame, image=self.pictograms["Liked"], command=lambda t=title: self.openRecipe(recipe=t)).place(x=0, y=0)
+
+            # 3. Für späteres Resizing registrieren
+            self.recipe_assets[title] = [orig, btn_img]
+
+            column += 1
+            if column == 3:
+                column = 0
+                row += 1
+
+
+        
     def get_resized_photo(self, img_original, current_width):
             new_width = int(current_width / 3)
             new_width = max(new_width, 50) # Mindestbreite
@@ -531,12 +624,7 @@ class RecipeFinder:
 
     
 
-    def Favorits(self, event=None):
-        for widget in self.INTERFACE.winfo_children():
-            widget.destroy()
-        
-        if self.DEBUG:
-            print("FAVORITS")
+    
 
     def Ingredients(self, event=None):
         for widget in self.INTERFACE.winfo_children():
