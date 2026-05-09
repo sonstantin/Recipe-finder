@@ -75,6 +75,7 @@ class RecipeFinder:
             "Notification": f"{self.dir_name}/RecipeFinder/Pictograms/important.svg",
             "Save": f"{self.dir_name}/RecipeFinder/Pictograms/save.svg",
             "Ingredient": f"{self.dir_name}/RecipeFinder/Pictograms/strawberry.svg",
+            "Liked": f"{self.dir_name}/RecipeFinder/Pictograms/favorite--filled.svg",
         }
 
         for part in self.pictograms:
@@ -235,6 +236,26 @@ class RecipeFinder:
         if self.DEBUG:
             print("RECIPE")
 
+        def toggle_favorite():
+            if text["Liked"] == True:
+                favorite = False
+            else:
+                favorite = True
+
+            with open(f"{self.dir_name}/RecipeFinder/Recipes/{recipe}.json", mode="r", encoding="utf-8") as f:
+                data = json.load(f)
+
+            data["Liked"] = favorite
+
+            with open(f"{self.dir_name}/RecipeFinder/Recipes/{recipe}.json", mode="w", encoding="utf-8") as f:
+                json.dump(data, f)
+
+            text["Liked"] = favorite
+
+            generateButtons()
+
+            
+
 
         img = tk.PhotoImage(file=f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{recipe}.png")
         self.recipecanvas = tk.Canvas(self.INTERFACE)
@@ -249,12 +270,11 @@ class RecipeFinder:
         self.scroll_frame = tk.Frame(self.recipecanvas)
         self.recipecanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
 
-        # 2. Label erstellen und Bild zuweisen
+       
         label = tk.Label(self.scroll_frame, image=img)
         label.pack()
 
-        # WICHTIG: Referenz behalten! 
-        # In Funktionen löscht Python das Bild aus dem Speicher, wenn man es nicht explizit speichert:
+        
         label.image = img 
 
         try:
@@ -267,10 +287,29 @@ class RecipeFinder:
             var = tk.BooleanVar()
             cb = tk.Checkbutton(root, text=f"{ingredient}       {text["Ingredients"][f"{ingredient}"]}", variable=var)
             cb.pack(anchor="e", padx=20)
-            doneData[f"{ingredient}       {text["Ingredients"][f"{ingredient}"]}"] = var # Variable speichern, um sie später abzurufen
+            doneData[f"{ingredient}       {text["Ingredients"][f"{ingredient}"]}"] = var 
 
-        tk.Label(self.scroll_frame, text=text["Title"], font=("Arial", 14, "bold")).pack()
-        tk.Label(self.scroll_frame, text=text["Description"], pady=10).pack()
+        tk.Label(self.INTERFACE, text=text["Title"], font=("Arial", 14, "bold")).pack()
+        tk.Label(self.INTERFACE, text=text["Description"], pady=10).pack()
+        def generateButtons():
+            if hasattr(self, "Button") and self.Button is not None:
+                if text["Liked"]:
+                    self.Button.config(image=self.pictograms["Liked"], text="Aus Favoriten entfernen")
+                else:
+                    self.Button.config(image=self.pictograms["Favorite"], text="Zu Favoriten hinzufügen")
+            else:
+                if text["Liked"]:
+                    self.Button = tk.Button(self.INTERFACE, image=self.pictograms["Liked"], 
+                                        text="Aus Favoriten entfernen", compound="left", 
+                                        command=toggle_favorite)
+                else:
+                    self.Button = tk.Button(self.INTERFACE, image=self.pictograms["Favorite"], 
+                                        text="Zu Favoriten hinzufügen", compound="left", 
+                                        command=toggle_favorite)
+                self.Button.pack(side=tk.RIGHT)
+
+
+        generateButtons()
 
         
     
@@ -364,6 +403,8 @@ class RecipeFinder:
                 btn_img.image = photo 
                 
                 tk.Button(frame, text=title, font=("Arial", 14, "bold"), command=lambda t=title: self.openRecipe(recipe=t)).pack()
+                if recipe["Liked"] == True:
+                    tk.Button(frame, image=self.pictograms["Liked"], command=lambda t=title: self.openRecipe(recipe=t)).place(x=0, y=0)
 
                 self.recipe_assets[title] = [orig, btn_img]
 
@@ -469,12 +510,16 @@ class RecipeFinder:
             frame = tk.Frame(self.scroll_frame, relief="solid", borderwidth=1)
             frame.grid(row=row, column=column, padx=5, pady=5)
 
+            
+
             btn_img = tk.Button(frame, image=photo, command=lambda t=title: self.openRecipe(recipe=t))
             btn_img.pack()
             # Referenz im Button-Objekt speichern gegen Garbage Collection
             btn_img.image = photo 
             
             tk.Button(frame, text=title, font=("Arial", 14, "bold"), command=lambda t=title: self.openRecipe(recipe=t)).pack()
+            if recipe["Liked"] == True:
+                tk.Button(frame, image=self.pictograms["Liked"], command=lambda t=title: self.openRecipe(recipe=t)).place(x=0, y=0)
 
             # 3. Für späteres Resizing registrieren
             self.recipe_assets[title] = [orig, btn_img]
@@ -537,7 +582,7 @@ class RecipeFinder:
                     f_dst.write(f_src.read())
 
             with open(f"{self.dir_name}/RecipeFinder/Recipes/{self.NewRecipeTitle.get()}.json", mode="w", encoding="utf-8") as f:
-                json.dump({"Title": f"{self.NewRecipeTitle.get()}", "Description": f"{self.NewRecipe.get(1.0, "end")}", "Category": f"{category.replace(" ", "")}", "Ingredients": RecipeIngredients}, f, indent=4,ensure_ascii=False)
+                json.dump({"Title": f"{self.NewRecipeTitle.get()}", "Description": f"{self.NewRecipe.get(1.0, "end")}", "Category": f"{category.replace(" ", "")}", "Ingredients": RecipeIngredients, "Liked": False}, f, indent=4,ensure_ascii=False)
             self.openRecipe(recipe=self.NewRecipeTitle.get())
         def askForCategory():
             selected_item = self.tree.focus()
