@@ -180,6 +180,7 @@ class RecipeFinder:
             print("SEARCH")
         self.search_var = tk.StringVar(value="Suche ein Rezept")
         self.searchEntry = ttk.Entry(self.INTERFACE, textvariable=self.search_var)
+        
         self.searchEntry.grid(row=0, column=0, sticky="ew")
         original_img = cairosvg.svg2png(url=f"{self.dir_name}/RecipeFinder/Pictograms/search.svg")
         original_img = Image.open(io.BytesIO(original_img))
@@ -192,6 +193,7 @@ class RecipeFinder:
         searchimagecanvas = tk.Canvas(self.INTERFACE, width=20, height=20)
         searchimagecanvas.place(x="63.15c",y=0)
         searchimagecanvas.create_image(0,0,anchor="nw",image=self.pictograms["Small_Search"])
+
         searchimagecanvas.bind("<Button-1>", self.doTheSearch)
         if self.DEBUG:
             searchimagecanvas.config(bg="orange")
@@ -275,6 +277,104 @@ class RecipeFinder:
     def doTheSearch(self, event=None):
         if self.DEBUG:
             print(f"Searching for '{self.searchEntry.get()}'")
+        alle_dateien = []
+        
+        
+        
+        query = self.searchEntry.get().lower().strip()
+        if query == "suche ein rezept":
+            return
+        
+
+        # 1. UI zurücksetzen (wie in opencategorie)
+        for widget in self.INTERFACE.winfo_children():
+            widget.destroy()
+
+        
+        self.searchEntry = ttk.Entry(self.INTERFACE, width=self.breite-180)
+        
+        self.searchEntry.pack()
+        original_img = cairosvg.svg2png(url=f"{self.dir_name}/RecipeFinder/Pictograms/search.svg")
+        original_img = Image.open(io.BytesIO(original_img))
+        original_img = original_img.resize((16, 16)) 
+        self.pictograms["Small_Search"]  = ImageTk.PhotoImage(original_img)
+        searchimagecanvas = tk.Canvas(self.INTERFACE, width=20, height=20)
+        searchimagecanvas.place(x="63.15c",y=0)
+        searchimagecanvas.create_image(0,0,anchor="nw",image=self.pictograms["Small_Search"])
+
+        searchimagecanvas.bind("<Button-1>", self.doTheSearch)
+
+        # 2. Alle Dateien finden (Bilder ausschließen)
+        alle_dateien = []
+        path = f'{self.dir_name}/RecipeFinder/Recipes'
+        for root, dirs, files in os.walk(path):
+            for file in files:
+                full_path = os.path.join(root, file)
+                if "Pictures" not in full_path:
+                    alle_dateien.append(full_path)
+
+        # 3. Rezepte filtern, deren Titel den Suchbegriff enthält
+        found_recipes = []
+        for data in alle_dateien:
+            try:
+                with open(data, mode="r", encoding="utf-8") as f:
+                    JSONData = json.load(f)
+                
+                # Suche im Titel (Case-Insensitive)
+                if query in JSONData["Title"].lower():
+                    # Bereinigung der Kategorie wie im Original
+                    JSONData["Category"] = JSONData["Category"].strip()
+                    found_recipes.append(JSONData)
+            except Exception as e:
+                if self.DEBUG: print(f"Fehler beim Laden von {data}: {e}")
+
+        # 4. GUI Aufbau (Canvas & Scrollbar)
+        self.categoriecanvas = tk.Canvas(self.INTERFACE)
+        self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="vertical", command=self.categoriecanvas.yview)
+        self.categoriecanvas.configure(yscrollcommand=self.scrollbar.set)
+        
+        self.scrollbar.pack(side="right", fill="y")
+        self.categoriecanvas.pack(side="left", fill="both", expand=True)
+
+        self.scroll_frame = tk.Frame(self.categoriecanvas)
+        self.categoriecanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
+
+        # Scroll-Bereich aktualisieren, wenn sich der Frame füllt
+        self.scroll_frame.bind("<Configure>", lambda e: self.categoriecanvas.configure(scrollregion=self.categoriecanvas.bbox("all")))
+
+        self.recipe_assets = {}
+        row, column = 0, 0
+        current_ui_width = self.INTERFACE.winfo_width()
+        if current_ui_width < 100: current_ui_width = self.breite
+
+        # 5. Gefundene Rezepte anzeigen
+        for recipe in found_recipes:
+            title = recipe["Title"]
+            img_path = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{title}.png"
+            
+            try:
+                orig = Image.open(img_path)
+                photo = self.get_resized_photo(orig, current_ui_width)
+                
+                frame = tk.Frame(self.scroll_frame, relief="solid", borderwidth=1)
+                frame.grid(row=row, column=column, padx=5, pady=5)
+
+                btn_img = tk.Button(frame, image=photo, command=lambda t=title: self.openRecipe(recipe=t))
+                btn_img.pack()
+                btn_img.image = photo 
+                
+                tk.Button(frame, text=title, font=("Arial", 14, "bold"), command=lambda t=title: self.openRecipe(recipe=t)).pack()
+
+                self.recipe_assets[title] = [orig, btn_img]
+
+                column += 1
+                if column == 3:
+                    column = 0
+                    row += 1
+            except Exception as e:
+                if self.DEBUG: print(f"Bildfehler bei {title}: {e}")
+
+
 
 
     def Home(self, event=None):
@@ -317,7 +417,7 @@ class RecipeFinder:
 
         if self.DEBUG:
             print(alle_dateien)
-
+        
         self.recipes[f"{categorie}"] = []
         for data in alle_dateien:
             with open(f"{data}", mode="r", encoding="utf-8") as f:
