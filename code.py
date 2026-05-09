@@ -240,7 +240,7 @@ class RecipeFinder:
         self.recipecanvas.configure(yscrollcommand=self.scrollbar.set)
         
 
-        
+       
         self.scrollbar.pack(side="right", fill="y")
         self.recipecanvas.pack(side="left", fill="both", expand=True)
 
@@ -260,6 +260,12 @@ class RecipeFinder:
                 text = json.load(f)
         except FileNotFoundError:
             messagebox.showerror("Fehler", "Ein unerwarteter Fehler ist aufgetreten! Bitte melde das den Entwicklern auf\n https://github.com/sonstantin/Recipe-finder-by-Mathilda/issues")
+        doneData = {}
+        for ingredient in text["Ingredients"]:
+            var = tk.BooleanVar()
+            cb = tk.Checkbutton(root, text=f"{ingredient}       {text["Ingredients"][f"{ingredient}"]}", variable=var)
+            cb.pack(anchor="e", padx=20)
+            doneData[f"{ingredient}       {text["Ingredients"][f"{ingredient}"]}"] = var # Variable speichern, um sie später abzurufen
 
         tk.Label(self.scroll_frame, text=text["Title"], font=("Arial", 14, "bold")).pack()
         tk.Label(self.scroll_frame, text=text["Description"], pady=10).pack()
@@ -394,6 +400,7 @@ class RecipeFinder:
             print("INGREDIENTS")
 
     def Create(self, event=None):
+        RecipeIngredients = {}
         # 1. Die StringVar definieren
         self.search_var = tk.StringVar()
         self.RecipeIngredients = {}
@@ -430,7 +437,7 @@ class RecipeFinder:
                     f_dst.write(f_src.read())
 
             with open(f"{self.dir_name}/RecipeFinder/Recipes/{self.NewRecipeTitle.get()}.json", mode="w", encoding="utf-8") as f:
-                json.dump({"Title": f"{self.NewRecipeTitle.get()}", "Description": f"{self.NewRecipe.get(1.0, "end")}", "Category": f"{category.replace(" ", "")}"}, f, indent=4,ensure_ascii=False)
+                json.dump({"Title": f"{self.NewRecipeTitle.get()}", "Description": f"{self.NewRecipe.get(1.0, "end")}", "Category": f"{category.replace(" ", "")}", "Ingredients": RecipeIngredients}, f, indent=4,ensure_ascii=False)
             self.openRecipe(recipe=self.NewRecipeTitle.get())
         def askForCategory():
             selected_item = self.tree.focus()
@@ -449,6 +456,12 @@ class RecipeFinder:
 
                     with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
                         json.dump(self.ingredients, f, ensure_ascii=False)
+
+            elif newIngredient:
+                print("NewIngredient:")
+                print(newIngredient)
+                RecipeIngredients[f"{newIngredient}"] = simpledialog.askstring("Beschreibung", "Willst du eine Beschreibung hinzufügen?\nFalls du willst, gib sie bitte hier ein.")
+
 
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
