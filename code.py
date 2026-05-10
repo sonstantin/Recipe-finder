@@ -272,7 +272,12 @@ class RecipeFinder:
         self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="vertical", command=self.recipecanvas.yview)
         self.recipecanvas.configure(yscrollcommand=self.scrollbar.set)
         
-
+        
+        try:
+            with open(f"{self.dir_name}/RecipeFinder/Recipes/{recipe}.json", mode="r",encoding="utf-8") as f:
+                text = json.load(f)
+        except FileNotFoundError:
+            messagebox.showerror("Fehler", "Ein unerwarteter Fehler ist aufgetreten! Bitte melde das den Entwicklern auf\n https://github.com/sonstantin/Recipe-finder-by-Mathilda/issues")
        
         self.scrollbar.pack(side="right", fill="y")
         self.recipecanvas.pack(side="left", fill="both", expand=True)
@@ -280,46 +285,61 @@ class RecipeFinder:
         self.scroll_frame = tk.Frame(self.recipecanvas)
         self.recipecanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
 
-       
-        label = tk.Label(self.scroll_frame, image=img)
-        label.pack()
+        
 
         
+        self.scroll_frame.bind("<Configure>", lambda e: self.recipecanvas.configure(scrollregion=self.recipecanvas.bbox("all")))
+        self.recipecanvas.bind_all("<MouseWheel>", lambda e: self.recipecanvas.yview_scroll(int(-1*(e.delta/120)), "units"))
+        
+
+
+        # BILD (im scroll_frame)
+        label = tk.Label(self.scroll_frame, image=img)
+        label.pack()
         label.image = img 
 
-        try:
-            with open(f"{self.dir_name}/RecipeFinder/Recipes/{recipe}.json", mode="r",encoding="utf-8") as f:
-                text = json.load(f)
-        except FileNotFoundError:
-            messagebox.showerror("Fehler", "Ein unerwarteter Fehler ist aufgetreten! Bitte melde das den Entwicklern auf\n https://github.com/sonstantin/Recipe-finder-by-Mathilda/issues")
-        doneData = {}
-        for ingredient in text["Ingredients"]:
-            var = tk.BooleanVar()
-            cb = tk.Checkbutton(root, text=f"{ingredient}       {text["Ingredients"][f"{ingredient}"]}", variable=var)
-            cb.pack(anchor="e", padx=20)
-            doneData[f"{ingredient}       {text["Ingredients"][f"{ingredient}"]}"] = var 
+        # TITEL (jetzt im scroll_frame statt INTERFACE)
+        tk.Label(self.scroll_frame, text=text["Title"], font=("Arial", 14, "bold")).pack()
+        
+        # BESCHREIBUNG (jetzt im scroll_frame)
+        tk.Label(self.scroll_frame, text=text["Description"], pady=10).pack()
 
-        tk.Label(self.INTERFACE, text=text["Title"], font=("Arial", 14, "bold")).pack()
-        tk.Label(self.INTERFACE, text=text["Description"], pady=10).pack()
+        # ZUTATEN (hier hattest du "root" stehen, sollte wohl auch in den scroll_frame)
+        for ingredient, amount in text["Ingredients"].items():
+            var = tk.BooleanVar()
+            # Hier self.scroll_frame statt root nutzen!
+            cb = tk.Checkbutton(self.scroll_frame, text=f"{ingredient} {amount}", variable=var)
+            cb.pack(anchor="w", padx=20) # "w" für linksbündig unter dem Text
+
         def generateButtons():
+            # Button auch in den scroll_frame packen!
             if hasattr(self, "Button") and self.Button is not None:
                 if text["Liked"]:
                     self.Button.config(image=self.pictograms["Liked"], text="Aus Favoriten entfernen")
                 else:
                     self.Button.config(image=self.pictograms["Favorite"], text="Zu Favoriten hinzufügen")
             else:
-                if text["Liked"]:
-                    self.Button = tk.Button(self.INTERFACE, image=self.pictograms["Liked"], 
-                                        text="Aus Favoriten entfernen", compound="left", 
-                                        command=toggle_favorite)
-                else:
-                    self.Button = tk.Button(self.INTERFACE, image=self.pictograms["Favorite"], 
-                                        text="Zu Favoriten hinzufügen", compound="left", 
-                                        command=toggle_favorite)
-                self.Button.pack(side=tk.RIGHT)
+                self.Button = tk.Button(self.scroll_frame, image=self.pictograms["Liked" if text["Liked"] else "Favorite"], 
+                                        text="..." , compound="left", command=toggle_favorite)
+                self.Button.pack(pady=10)
+
+        generateButtons()
+
+        # WICHTIG: Damit das Scrollen funktioniert
+        self.scroll_frame.update_idletasks()
+        self.recipecanvas.config(scrollregion=self.recipecanvas.bbox("all"))
 
 
         generateButtons()
+
+        # Am Ende der Funktion openRecipe:
+        self.INTERFACE.update_idletasks() # Wichtig: Erst alles zeichnen lassen
+        region = self.recipecanvas.bbox("all")
+        self.recipecanvas.config(scrollregion=region)
+
+        
+
+
 
         
     
