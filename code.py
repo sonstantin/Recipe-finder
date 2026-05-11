@@ -11,6 +11,7 @@ class RecipeFinder:
     def __init__(self, master):
 
         self.DEBUG = False
+        self.didIngredients = False
         self.standart_color = "#117a91"
         self.highlight_color = "#145563"
         self.dir_name = os.path.dirname(os.path.realpath(__file__))
@@ -76,6 +77,7 @@ class RecipeFinder:
             "Save": f"{self.dir_name}/RecipeFinder/Pictograms/save.svg",
             "Ingredient": f"{self.dir_name}/RecipeFinder/Pictograms/strawberry.svg",
             "Liked": f"{self.dir_name}/RecipeFinder/Pictograms/favorite--filled.svg",
+            "Start": f"{self.dir_name}/RecipeFinder/Pictograms/play.svg",
         }
 
         for part in self.pictograms:
@@ -103,6 +105,7 @@ class RecipeFinder:
             print("Debug")
             if self.DEBUG == False:
                 self.DEBUG = True
+                
             else:
                 self.DEBUG = False
 
@@ -311,23 +314,40 @@ class RecipeFinder:
             cb = tk.Checkbutton(self.scroll_frame, text=f"{ingredient} {amount}", variable=var)
             cb.pack(anchor="w", padx=20) # "w" für linksbündig unter dem Text
 
+        def addToShoppingList():
+            for ingredient, amount in text["Ingredients"].items():
+                try:
+                    self.ingredients[f"{ingredient}"] = [self.ingredients[f"{ingredient}"][0], [True, f"{amount}"]]
+                except KeyError:
+                    self.ingredients[f"{ingredient}"] = [simpledialog.askstring("Kategorie", f"Welcher Kategorie würdest du {ingredient} zuordnen?")][0], [True, f"{amount}"]
+
+                print(self.ingredients[f"{ingredient}"])
+            with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
+                json.dump(self.ingredients, f, ensure_ascii=False, indent=4)
         def generateButtons():
             # Button auch in den scroll_frame packen!
-            if hasattr(self, "Button") and self.Button is not None:
+            # Prüfen, ob die Variable existiert UND das Widget im GUI noch lebt
+            if hasattr(self, "Button") and self.Button is not None and self.Button.winfo_exists():
                 if text["Liked"]:
                     self.Button.config(image=self.pictograms["Liked"], text="Aus Favoriten entfernen")
                 else:
                     self.Button.config(image=self.pictograms["Favorite"], text="Zu Favoriten hinzufügen")
             else:
+                # Falls der Button zerstört wurde oder noch nie existierte, neu erstellen
                 self.Button = tk.Button(self.scroll_frame, image=self.pictograms["Liked" if text["Liked"] else "Favorite"], 
-                                        text="..." , compound="left", command=toggle_favorite)
+                                        text="...", compound="left", command=toggle_favorite)
                 self.Button.pack(pady=10)
 
+
         generateButtons()
+
+        tk.Button(self.scroll_frame, text="Auf die Zutatenliste setzten", image=self.pictograms["Start"], compound="left", command=addToShoppingList).pack()
 
         # WICHTIG: Damit das Scrollen funktioniert
         self.scroll_frame.update_idletasks()
         self.recipecanvas.config(scrollregion=self.recipecanvas.bbox("all"))
+
+
 
 
         generateButtons()
@@ -649,8 +669,155 @@ class RecipeFinder:
     def Ingredients(self, event=None):
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
+
+
+        
         if self.DEBUG:
             print("INGREDIENTS")
+
+        if self.didIngredients == False:
+
+            self.search_var = tk.StringVar(value="Füge eine Zutat hinzu")
+            self.didIngredients = True
+        else:
+            self.search_var = tk.StringVar(value="")
+
+        tk.Label(self.INTERFACE, text="Deine Zutaten:", font=("Arial", 15, "bold")).grid(row=0,column=0)
+
+        with open(f"{self.dir_name}/RecipeFinder/Ingredients/shoppingList.json", mode="r", encoding="utf-8") as f:
+                Shopping = json.load(f)
+
+        self.ingredientcanvas = tk.Canvas(self.INTERFACE, width=self.breite-150)
+        hoehe = self.ingredientcanvas.winfo_height()
+        print(hoehe)
+        self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="horizontal", command=self.ingredientcanvas.xview, )
+        self.ingredientcanvas.configure(xscrollcommand=self.scrollbar.set)
+        
+
+        
+        self.scrollbar.grid(row=3, column=0, sticky="ew")
+        self.ingredientcanvas.grid(row=2, column=0)
+
+        self.scroll_frame = tk.Frame(self.ingredientcanvas)
+        self.ingredientcanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
+
+
+
+
+
+
+        def checkIfMatching(*args):
+            for widget in self.scroll_frame.winfo_children():
+                widget.destroy()
+            self.matchingIngredients = {}
+            search_term = self.search_var.get().lower()
+
+            for part, category in self.ingredients.items():
+                if search_term in part.lower():
+                    self.matchingIngredients[part] = category
+            column = 0
+            for name, kategorie in self.matchingIngredients.items():
+                
+               
+                
+                if self.DEBUG:
+                    print(name)
+                    print(kategorie)
+
+                if kategorie[1] == False:
+                    tk.Button(self.scroll_frame, text=name, height=15, width=20, padx=10, command=lambda ingredient=name: addtoShoppingList(ingredient=ingredient)).grid(row=1, column=column, sticky="s")
+                    column += 1
+
+
+        def addtoShoppingList(ingredient):
+            self.ingredients[f"{ingredient}"] = [self.ingredients[f"{ingredient}"][0], [True, simpledialog.askstring("Notizen", "Willst du noch Notizen hinzufügen?")]]
+            with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
+                json.dump(self.ingredients, f, ensure_ascii=False, indent=4)
+            self.Ingredients()
+
+        def removefromShoppingList(ingredient):
+            self.ingredients[f"{ingredient}"] = [self.ingredients[f"{ingredient}"][0], False]
+            with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
+                json.dump(self.ingredients, f, ensure_ascii=False, indent=4)
+            self.Ingredients()
+        def askForCategory():
+            selected_item = self.tree.focus()
+            print(f"Test{self.tree.item(selected_item)}")
+            selected_item = self.tree.item(selected_item)["text"]
+            print(selected_item)
+            newIngredient = selected_item
+            
+            
+            if not newIngredient:
+                name = self.search_var.get()
+                category = simpledialog.askstring("Kategorie", f"Welcher Kategorie würdest du {name} zuordnen?")
+                if category:
+                    self.ingredients[name] = category
+                    checkIfMatching()
+
+                    with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
+                        json.dump(self.ingredients, f, ensure_ascii=False)
+
+            elif newIngredient:
+                print("NewIngredient:")
+                print(newIngredient)
+                Shopping[f"{newIngredient}"] = simpledialog.askstring("Beschreibung", "Willst du eine Beschreibung hinzufügen?\nFalls du willst, gib sie bitte hier ein.")
+
+        ingrediententry = tk.Entry(self.INTERFACE, width=self.breite-150, textvariable=self.search_var)
+        
+        self.search_var.trace_add("write", checkIfMatching)
+        ingrediententry.grid(row=1,column=0)
+
+        
+
+        tk.Label(self.INTERFACE, text="Einkaufsliste", font=("Arial", 15, "bold")).grid(row=4, column=0)
+
+        row = 0
+        column = 0
+
+        
+
+        self.shoppinglistcanvas = tk.Canvas(self.INTERFACE, width=self.breite-150, height=1000)
+        hoehe = self.shoppinglistcanvas.winfo_height()
+        
+        self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="vertical", command=self.shoppinglistcanvas.yview, )
+        self.shoppinglistcanvas.configure(yscrollcommand=self.scrollbar.set)
+        
+
+        
+        self.scrollbar.grid(row=6, column=3, sticky="ns")
+        self.shoppinglistcanvas.grid(row=6, column=0)
+
+        scroll = tk.Frame(self.shoppinglistcanvas)
+        self.shoppinglistcanvas.create_window((0, 0), window=scroll, anchor="nw")
+
+        for name, kategorie in self.ingredients.items():
+                
+               
+            
+            if self.DEBUG:
+                print(name)
+                print(kategorie)
+
+            if kategorie[1] == False:
+                continue
+            else:
+                print(name, kategorie)
+                tk.Button(scroll, text=f"""{name}
+            
+{kategorie[1][1]}""", height=15, width=20, padx=10, command=lambda ingredient=name: removefromShoppingList(ingredient=ingredient)).grid(row=row, column=column)
+                column += 1
+                if column == 4:
+                    row += 1
+                    column = 0
+
+
+
+
+        
+
+
+
 
     def Create(self, event=None):
         RecipeIngredients = {}
@@ -671,7 +838,11 @@ class RecipeFinder:
                 if search_term in part.lower():
                     self.matchingIngredients[part] = category
             for name, kategorie in self.matchingIngredients.items():
-                self.tree.insert("", "end", values=(name, kategorie), text=f"{name}")
+                self.tree.insert("", "end", values=(name, kategorie[0]), text=f"{name}")
+                
+                if self.DEBUG:
+                    print(name)
+                    print(kategorie)
             
         def askforImage():
             self.image = filedialog.askopenfilename(filetypes=[("Bilder im PNG-Format", "*.png")])
@@ -704,7 +875,7 @@ class RecipeFinder:
                 name = self.search_var.get()
                 category = simpledialog.askstring("Kategorie", f"Welcher Kategorie würdest du {name} zuordnen?")
                 if category:
-                    self.ingredients[name] = category
+                    self.ingredients[name] = (category, False)
                     checkIfMatching()
 
                     with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
