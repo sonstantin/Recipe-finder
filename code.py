@@ -486,333 +486,280 @@ class RecipeFinder:
 
 
 
+
+
     def Home(self, event=None):
+        # 1. Clear previous UI elements
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
         if self.DEBUG:
             print("HOME")
 
-        tk.Label(self.INTERFACE, text="Für dich empfohlen:", font=("arial", 15, "bold")).pack()
+        tk.Label(self.INTERFACE, text="Für dich empfohlen:", font=("arial", 15, "bold")).pack(anchor="w", padx=10, pady=5)
 
-        self.categoriecanvas = tk.Canvas(self.INTERFACE)
+        # 2. Setup Canvas and Scrollbar Components
+        self.categoriecanvas = tk.Canvas(self.INTERFACE, highlightthickness=0)
         self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="vertical", command=self.categoriecanvas.yview)
         self.categoriecanvas.configure(yscrollcommand=self.scrollbar.set)
-        
-
         
         self.scrollbar.pack(side="right", fill="y")
         self.categoriecanvas.pack(side="left", fill="both", expand=True)
 
+        # Container frame inside canvas
         self.scroll_frame = tk.Frame(self.categoriecanvas)
-        self.categoriecanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
-        print(self.recipes)
+        
+        # Create the window and keep a reference to its ID to configure width later
+        canvas_window = self.categoriecanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
 
+        # --- CRITICAL SCROLL FIXES ---
+        # Fix A: Update scroll region automatically when widgets are added
+        self.scroll_frame.bind(
+            "<Configure>", 
+            lambda e: self.categoriecanvas.configure(scrollregion=self.categoriecanvas.bbox("all"))
+        )
+        
+        # Fix B: Make sure the scroll frame expands to match the window width
+        self.categoriecanvas.bind(
+            "<Configure>", 
+            lambda e: self.categoriecanvas.itemconfig(canvas_window, width=e.width)
+        )
+        # -----------------------------
+
+        # 3. File discovery and loading (Optimized to prevent syntax token errors)
         alle_dateien = []
-        path = f'{self.dir_name}/RecipeFinder/Recipes'
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                full_path = os.path.join(root, file)
-                if "Pictures" not in full_path:
-                    alle_dateien.append(full_path)
+        path = os.path.join(self.dir_name, 'RecipeFinder', 'Recipes')
+        
+        if os.path.exists(path):
+            for root, dirs, files in os.walk(path):
+                if "Pictures" in root:
+                    continue
+                for file in files:
+                    if file.endswith('.json'):
+                        alle_dateien.append(os.path.join(root, file))
 
-        # 3. Rezepte filtern, deren Titel den Suchbegriff enthält
         found_recipes = []
         for data in alle_dateien:
             try:
                 with open(data, mode="r", encoding="utf-8") as f:
                     JSONData = json.load(f)
                 
-                # Suche im Titel (Case-Insensitive)
-                
-                    
                 found_recipes.append(JSONData)
-                self.recipes[f"{JSONData["Title"]}"] = JSONData
-            except FileNotFoundError:
-                print("Ein unerwarteter Fehler ist aufgetreten!")
+                # Fixed double quote syntax error inside string dictionary access
+                title_key = JSONData["Title"]
+                self.recipes[title_key] = JSONData
+            except (FileNotFoundError, json.JSONDecodeError):
+                if self.DEBUG:
+                    print(f"Fehler beim Laden von: {data}")
 
-        stats = {}
-        for category in self.categories:
-            stats[f"{category}"] = 0
+        # 4. Calculate Stats
+        stats = {str(category): 0 for category in self.categories}
 
-        for recipe in self.recipes:
-            if self.DEBUG:
-                print(f"{recipe} found!")
-            if self.recipes[f"{recipe}"]["Liked"] == True:
-                stats[f"{self.recipes[f"{recipe}"]["Category"]}"] += 1
+        for recipe_title, recipe_data in self.recipes.items():
+            if recipe_data.get("Liked") == True:
+                cat = recipe_data.get("Category")
+                if cat in stats:
+                    stats[cat] += 1
 
-        if self.DEBUG:
-            print(f"{self.recipes}")
-            print(f"{stats}")
-
-
-        self.biggest = "Desserts"
         self.recipe_assets = {}
-        
         self.row = 0
-            
+        
         def show_categorie():
             column = 0
-            
-            # 1. Den aktuellen Spitzenreiter in stats finden
-            # Wir initialisieren self.biggest mit dem ersten Key aus stats
-            if stats:
-                self.biggest = list(stats.keys())[0]
-            else:
-                return # Falls stats leer ist, abbrechen
+            if not stats:
+                return
                 
-            for stat in stats:
-                if stats[stat] > stats[self.biggest]:
-                    self.biggest = stat
-                    if self.DEBUG:
-                        print(self.biggest)
-                        
-            categorie = self.biggest
+            # Find category with most likes
+            biggest = max(stats, key=stats.get)
+            categorie = biggest
             
-            # UI für die Kategorie-Überschrift
-            tk.Label(self.scroll_frame, text=f"{categorie}", font=("Arial", 15, "bold")).grid(row=self.row, column=0)
+            # UI Category Header
+            tk.Label(self.scroll_frame, text=f"{categorie}", font=("Arial", 15, "bold")).grid(row=self.row, column=0, sticky="w", columnspan=3, pady=(10, 2))
             self.row += 1
-            current_ui_width = self.INTERFACE.winfo_width()
             
-            # Rezepte dieser Kategorie anzeigen
-            for recipe in self.recipes:
-                if self.recipes[recipe]["Category"] == categorie:
-                    title = self.recipes[recipe]["Title"]
-                    img_path = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{title}.png"
+            current_ui_width = self.INTERFACE.winfo_width()
+            if current_ui_width < 100:
+                current_ui_width = self.breite
+            
+            # Render recipes inside this category row layout
+            for recipe_title, recipe_data in self.recipes.items():
+                if recipe_data.get("Category") == categorie:
+                    title = recipe_data["Title"]
+                    img_path = os.path.join(self.dir_name, 'RecipeFinder', 'Recipes', 'Pictures', f"{title}.png")
                     
-                    # Original laden und im Speicher behalten
-                    orig = Image.open(img_path)
-                    photo = self.get_resized_photo(orig, current_ui_width)
-                    
-                    # UI Elemente erstellen
-                    frame = tk.Frame(self.scroll_frame, relief="solid", borderwidth=1)
-                    frame.grid(row=self.row, column=column, padx=5, pady=5)
+                    try:
+                        orig = Image.open(img_path)
+                        photo = self.get_resized_photo(orig, current_ui_width)
+                        
+                        frame = tk.Frame(self.scroll_frame, relief="solid", borderwidth=1)
+                        frame.grid(row=self.row, column=column, padx=5, pady=5, sticky="nsew")
 
-                    btn_img = tk.Button(frame, image=photo, command=lambda t=title: self.openRecipe(recipe=t))
-                    btn_img.pack()
-                    btn_img.image = photo # Schutz vor Garbage Collection
-                    
-                    tk.Button(frame, text=title, font=("Arial", 14, "bold"), command=lambda t=title: self.openRecipe(recipe=t)).pack()
-                    if self.recipes[recipe].get("Liked") == True:
-                        # Referenz auf self.pictograms["Liked"] – stelle sicher, dass dieses Bild auch vor GC geschützt ist!
-                        btn_like = tk.Button(frame, image=self.pictograms["Liked"], command=lambda t=title: self.openRecipe(recipe=t))
-                        btn_like.place(x=0, y=0)
-                        btn_like.image = self.pictograms["Liked"]
+                        btn_img = tk.Button(frame, image=photo, command=lambda t=title: self.openRecipe(recipe=t))
+                        btn_img.pack()
+                        btn_img.image = photo 
+                        
+                        tk.Button(frame, text=title, font=("Arial", 14, "bold"), command=lambda t=title: self.openRecipe(recipe=t)).pack()
+                        
+                        if recipe_data.get("Liked") == True:
+                            btn_like = tk.Button(frame, image=self.pictograms["Liked"], command=lambda t=title: self.openRecipe(recipe=t))
+                            btn_like.place(x=0, y=0)
+                            btn_like.image = self.pictograms["Liked"]
 
-                    # Für späteres Resizing registrieren
-                    self.recipe_assets[title] = [orig, btn_img]
+                        self.recipe_assets[title] = [orig, btn_img]
+                    except Exception as e:
+                        if self.DEBUG:
+                            print(f"Error loading image for {title}: {e}")
 
                     column += 1
                     if column == 3:
                         column = 0
                         self.row += 1
             
-            # Falls die letzte Zeile nicht voll wurde, für die nächste Kategorie in die neue Zeile springen
             if column != 0:
                 self.row += 1
                 
-            # Jetzt die abgearbeitete Kategorie korrekt löschen (Rechtschreibung korrigiert)
             del stats[categorie]
 
-
-        # Die Schleife läuft so oft, wie du Kategorien hast
-        # Da wir stats manipulieren (löschen), nutzen wir eine Kopie der Keys für die Schleife
+        # Render loop using a copy of keys list
         for _ in list(self.categories):
             try:
                 show_categorie()
             except KeyError:
                 continue
 
+        
+        
+    def create_recipe_card(self, parent, recipe, title, photo, orig, row, column):
+        # Setting an explicit size for the card prevents Tkinter frames from collapsing
+        frame = tk.Frame(parent, relief="solid", borderwidth=1, width=self.breite/2, height=self.hoehe/2)
+        frame.grid(row=row, column=column, padx=5, pady=5)
+        
 
-        
-        
+        # Image background
+        img_label = tk.Label(frame, image=photo)
+        img_label.place(x=0, y=0, relwidth=1, relheight=1)
+
+        # Centralized action button
+        btn = tk.Button(
+            frame,
+            text=title,
+            font=("Arial", 14, "bold"),
+            command=lambda t=title: self.openRecipe(recipe=t)
+        )
+        btn.place(relx=0.5, rely=0.8, anchor="s")
+
+        # Overlay liked icon if applicable
+        if recipe.get("Liked"):
+            tk.Label(frame, image=self.pictograms["Liked"]).place(x=0, y=0)
+
+        # Store references using unique titles to prevent Garbage Collection from wiping images
+        self.recipe_assets[title] = {
+            "orig": orig,
+            "photo": photo,
+            "label": img_label
+        }
+
+        return frame
 
     def Favorits(self, event=None):
+        # 1. Clear previous UI elements
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
-        
+
         if self.DEBUG:
             print("FAVORITS")
-            print("Your Favorits:")
-        
-        
-        tk.Label(self.INTERFACE, text="Deine Favoriten:", font=("Arial", 15, "bold")).grid(row=0, column=0)
 
-        alle_dateien = []
-        path = f'{self.dir_name}/RecipeFinder/Recipes'
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                full_path = os.path.join(root, file)
-                if "Pictures" not in full_path:
-                    alle_dateien.append(full_path)
+        # Global dictionary to retain image references across both sections
+        self.recipe_assets = {}
 
-        # 3. Rezepte filtern, deren Titel den Suchbegriff enthält
-        found_recipes = []
-        for data in alle_dateien:
-            try:
-                with open(data, mode="r", encoding="utf-8") as f:
-                    JSONData = json.load(f)
-                
-                # Suche im Titel (Case-Insensitive)
-                if JSONData["Liked"] == True and JSONData["Done"] == True:
-                    # Bereinigung der Kategorie wie im Original
+        # Get accurate target UI width for dynamic resizing
+        current_ui_width = self.INTERFACE.winfo_width()
+        if current_ui_width < 100:
+            current_ui_width = self.breite
+
+        # 2. Optimization: Read files from disk EXACTLY ONCE
+        favoriten_recipes = []
+        neue_ideen_recipes = []
+        
+        recipes_path = os.path.join(self.dir_name, 'RecipeFinder', 'Recipes')
+
+        if os.path.exists(recipes_path):
+            for root, dirs, files in os.walk(recipes_path):
+                # Skip checking inside the Pictures directory entirely for faster loops
+                if "Pictures" in root:
+                    continue
                     
-                    found_recipes.append(JSONData)
-            except Exception as e:
-                if self.DEBUG: print(f"Fehler beim Laden von {data}: {e}")
+                for file in files:
+                    if file.endswith('.json'): # Explicitly look for data files
+                        full_path = os.path.join(root, file)
+                        try:
+                            with open(full_path, mode="r", encoding="utf-8") as f:
+                                recipe_data = json.load(f)
+                            
+                            # Sort into categories in memory
+                            if recipe_data.get("Liked"):
+                                if recipe_data.get("Done"):
+                                    favoriten_recipes.append(recipe_data)
+                                else:
+                                    neue_ideen_recipes.append(recipe_data)
+                                    
+                        except Exception as e:
+                            if self.DEBUG:
+                                print(f"Fehler beim Laden von {file}: {e}")
 
-        if self.DEBUG:
-            print(found_recipes)
+        # --- Section 1: Favoriten ---
+        tk.Label(self.INTERFACE, text="Deine Favoriten:", font=("Arial", 15, "bold")).grid(row=0, column=0, sticky="w", padx=10)
 
-        self.categoriecanvas = tk.Canvas(self.INTERFACE, height=600)
+        fav_canvas = tk.Canvas(self.INTERFACE, height=self.hoehe/2.5)
+        fav_scrollbar = tk.Scrollbar(self.INTERFACE, orient="horizontal", command=fav_canvas.xview)
+        fav_canvas.configure(xscrollcommand=fav_scrollbar.set)
 
-        self.scrollbar = tk.Scrollbar(
-            self.INTERFACE,
-            orient="horizontal",
-            command=self.categoriecanvas.xview
-        )
+        fav_scrollbar.grid(row=1, column=0, sticky="ew")
+        fav_canvas.grid(row=2, column=0, sticky="ew")
 
-        self.categoriecanvas.configure(xscrollcommand=self.scrollbar.set)
+        fav_scroll_frame = tk.Frame(fav_canvas)
+        fav_canvas.create_window((0, 0), window=fav_scroll_frame, anchor="nw")
 
-        # Layout
-        self.categoriecanvas.grid(row=0, column=0, sticky="ew")
-        self.scrollbar.grid(row=1, column=0, sticky="ew")
-        
-
-        
-        
-        self.categoriecanvas.grid(row=2, column=0, columnspan=3)
-        
-
-        self.scroll_frame = tk.Frame(self.categoriecanvas)
-        self.categoriecanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
-
-        # WICHTIG: Speicher für Originalbilder und Button-Referenzen
-        self.recipe_assets = {} # Speichert { "Titel": [OriginalImage, ButtonWidget] }
-
-        row, column = 0, 0
-        # Aktuelle Breite für die Erstberechnung holen
-        current_ui_width = self.INTERFACE.winfo_width() 
-        if current_ui_width < 100: current_ui_width = self.breite # Fallback falls noch nicht gerendert
-
-        for recipe in found_recipes:
-            if recipe["Done"] == True:
-                title = recipe["Title"]
-                img_path = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{title}.png"
-                
-                # 1. Original laden und im Speicher behalten
+        for idx, recipe in enumerate(favoriten_recipes):
+            title = recipe["Title"]
+            img_path = os.path.join(recipes_path, "Pictures", f"{title}.png")
+            
+            try:
                 orig = Image.open(img_path)
                 photo = self.get_resized_photo(orig, current_ui_width)
-                
-                # 2. UI Elemente erstellen
-                frame = tk.Frame(self.scroll_frame, relief="solid", borderwidth=1)
-                frame.grid(row=row, column=column, padx=5, pady=5)
-
-                
-
-                btn_img = tk.Button(frame, image=photo, command=lambda t=title: self.openRecipe(recipe=t))
-                btn_img.pack()
-                # Referenz im Button-Objekt speichern gegen Garbage Collection
-                btn_img.image = photo 
-                
-                tk.Button(frame, text=title, font=("Arial", 14, "bold"), command=lambda t=title: self.openRecipe(recipe=t)).pack()
-                if recipe["Liked"] == True and recipe["Done"] == False:
-                    tk.Button(frame, image=self.pictograms["Liked"], command=lambda t=title: self.openRecipe(recipe=t)).place(x=0, y=0)
-
-                # 3. Für späteres Resizing registrieren
-                self.recipe_assets[title] = [orig, btn_img]
-
-                column += 1
-
-
-        if self.DEBUG:
-            print("New Ideas:")
-
-        tk.Label(self.INTERFACE, text="Neue Ideen:", font=("Arial", 15, "bold")).grid(row=3, column=0)
-
-        alle_dateien = []
-        path = f'{self.dir_name}/RecipeFinder/Recipes'
-        for root, dirs, files in os.walk(path):
-            for file in files:
-                full_path = os.path.join(root, file)
-                if "Pictures" not in full_path:
-                    alle_dateien.append(full_path)
-
-        # 3. Rezepte filtern, deren Titel den Suchbegriff enthält
-        found_recipes = []
-        for data in alle_dateien:
-            try:
-                with open(data, mode="r", encoding="utf-8") as f:
-                    JSONData = json.load(f)
-                
-                # Suche im Titel (Case-Insensitive)
-                if JSONData["Liked"] == True and JSONData["Done"] == False:
-                    # Bereinigung der Kategorie wie im Original
-                    
-                    found_recipes.append(JSONData)
+                self.create_recipe_card(fav_scroll_frame, recipe, title, photo, orig, 0, idx)
             except Exception as e:
-                if self.DEBUG: print(f"Fehler beim Laden von {data}: {e}")
+                print(f"Image error for {title}: {e}")
 
-        if self.DEBUG:
-            print(found_recipes)
+        fav_scroll_frame.update_idletasks()
+        fav_canvas.configure(scrollregion=fav_canvas.bbox("all"))
 
-        self.canvas = tk.Canvas(self.INTERFACE, height=600)
 
-        self.scrollbar = tk.Scrollbar(
-            self.INTERFACE,
-            orient="horizontal",
-            command=self.canvas.xview
-        )
+        # --- Section 2: Neue Ideen ---
+        tk.Label(self.INTERFACE, text="Neue Ideen:", font=("Arial", 15, "bold")).grid(row=3, column=0, sticky="w", padx=10, pady=(15, 0))
 
-        self.canvas.configure(xscrollcommand=self.scrollbar.set)
+        ideen_canvas = tk.Canvas(self.INTERFACE, height=self.hoehe/2.5)
+        ideen_scrollbar = tk.Scrollbar(self.INTERFACE, orient="horizontal", command=ideen_canvas.xview)
+        ideen_canvas.configure(xscrollcommand=ideen_scrollbar.set)
 
-        # Layout
-        self.canvas.grid(row=5, column=0, sticky="ew")
-        self.scrollbar.grid(row=4, column=0, sticky="ew")
-        
+        ideen_scrollbar.grid(row=4, column=0, sticky="ew")
+        ideen_canvas.grid(row=5, column=0, sticky="ew")
 
-        
-        
-        self.canvas.grid(row=5, column=0, columnspan=3)
-        
+        ideen_scroll_frame = tk.Frame(ideen_canvas)
+        ideen_canvas.create_window((0, 0), window=ideen_scroll_frame, anchor="nw")
 
-        self.scroll = tk.Frame(self.canvas)
-        self.canvas.create_window((0, 0), window=self.scroll, anchor="nw")
-
-        # WICHTIG: Speicher für Originalbilder und Button-Referenzen
-        self.recipe_assets = {} # Speichert { "Titel": [OriginalImage, ButtonWidget] }
-
-        row, column = 0, 0
-        # Aktuelle Breite für die Erstberechnung holen
-        current_ui_width = self.INTERFACE.winfo_width() 
-        if current_ui_width < 100: current_ui_width = self.breite # Fallback falls noch nicht gerendert
-
-        for recipe in found_recipes:
+        for idx, recipe in enumerate(neue_ideen_recipes):
             title = recipe["Title"]
-            img_path = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{title}.png"
+            img_path = os.path.join(recipes_path, "Pictures", f"{title}.png")
             
-            # 1. Original laden und im Speicher behalten
-            orig = Image.open(img_path)
-            photo = self.get_resized_photo(orig, current_ui_width)
-            
-            # 2. UI Elemente erstellen
-            frame = tk.Frame(self.scroll, relief="solid", borderwidth=1)
-            frame.grid(row=row, column=column, padx=5, pady=5)
+            try:
+                orig = Image.open(img_path)
+                photo = self.get_resized_photo(orig, current_ui_width)
+                self.create_recipe_card(ideen_scroll_frame, recipe, title, photo, orig, 0, idx)
+            except Exception as e:
+                print(f"Image error for {title}: {e}")
 
-            
-
-            btn_img = tk.Button(frame, image=photo, command=lambda t=title: self.openRecipe(recipe=t))
-            btn_img.pack()
-            # Referenz im Button-Objekt speichern gegen Garbage Collection
-            btn_img.image = photo 
-            
-            tk.Button(frame, text=title, font=("Arial", 14, "bold"), command=lambda t=title: self.openRecipe(recipe=t)).pack()
-            if recipe["Liked"] == True and recipe["Done"] == False:
-                tk.Button(frame, image=self.pictograms["Liked"], command=lambda t=title: self.openRecipe(recipe=t)).place(x=0, y=0)
-
-            # 3. Für späteres Resizing registrieren
-            self.recipe_assets[title] = [orig, btn_img]
-
-            column += 1
+        ideen_scroll_frame.update_idletasks()
+        ideen_canvas.configure(scrollregion=ideen_canvas.bbox("all"))
 
         
 
@@ -921,158 +868,180 @@ class RecipeFinder:
     
 
     
-
     def Ingredients(self, event=None):
+        # 1. Wipe previous widgets cleanly
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
 
-
-        
         if self.DEBUG:
             print("INGREDIENTS")
 
-        if self.didIngredients == False:
-
+        # 2. Prevent stacking event traces on UI rebuilds
+        if not hasattr(self, 'didIngredients') or self.didIngredients == False:
             self.search_var = tk.StringVar(value="Füge eine Zutat hinzu")
             self.didIngredients = True
         else:
+            # If text is lingering, clear it out safely
             self.search_var = tk.StringVar(value="")
 
-        tk.Label(self.INTERFACE, text="Deine Zutaten:", font=("Arial", 15, "bold")).grid(row=0,column=0)
-
-        with open(f"{self.dir_name}/RecipeFinder/Ingredients/shoppingList.json", mode="r", encoding="utf-8") as f:
+        # Load Shopping list configuration data safely
+        shopping_list_path = os.path.join(self.dir_name, "RecipeFinder", "Ingredients", "shoppingList.json")
+        ingredients_path = os.path.join(self.dir_name, "RecipeFinder", "Ingredients", "ingredients.json")
+        
+        try:
+            with open(shopping_list_path, mode="r", encoding="utf-8") as f:
                 Shopping = json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
+            Shopping = {}
 
-        self.ingredientcanvas = tk.Canvas(self.INTERFACE, width=self.breite-150)
-        hoehe = self.ingredientcanvas.winfo_height()
-        print(hoehe)
-        self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="horizontal", command=self.ingredientcanvas.xview, )
-        self.ingredientcanvas.configure(xscrollcommand=self.scrollbar.set)
-        
+        # --- TOP SECTION: Matching Ingredients (Horizontal Scroll) ---
+        tk.Label(self.INTERFACE, text="Deine Zutaten:", font=("Arial", 15, "bold")).grid(row=0, column=0, sticky="w", padx=10)
 
-        
-        self.scrollbar.grid(row=3, column=0, sticky="ew")
-        self.ingredientcanvas.grid(row=2, column=0)
+        self.ingredientcanvas = tk.Canvas(self.INTERFACE, width=self.breite-150, height=120, highlightthickness=0)
+        # Fixed: Gave this its own unique instance name to prevent overwriting
+        self.horiz_scrollbar = tk.Scrollbar(self.INTERFACE, orient="horizontal", command=self.ingredientcanvas.xview)
+        self.ingredientcanvas.configure(xscrollcommand=self.horiz_scrollbar.set)
+
+        self.ingredientcanvas.grid(row=2, column=0, sticky="ew", padx=10)
+        self.horiz_scrollbar.grid(row=3, column=0, sticky="ew", padx=10)
 
         self.scroll_frame = tk.Frame(self.ingredientcanvas)
         self.ingredientcanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
 
+        # Dynamic scroll calculation trigger for Top Canvas
+        self.scroll_frame.bind(
+            "<Configure>",
+            lambda e: self.ingredientcanvas.configure(scrollregion=self.ingredientcanvas.bbox("all"))
+        )
 
+        # --- BOTTOM SECTION: Shopping List (Vertical Scroll) ---
+        tk.Label(self.INTERFACE, text="Einkaufsliste", font=("Arial", 15, "bold")).grid(row=4, column=0, sticky="w", padx=10, pady=(15, 2))
 
+        # Keep layout container dimensions bounded
+        self.shoppinglistcanvas = tk.Canvas(self.INTERFACE, width=self.breite-150, height=300, highlightthickness=0)
+        # Fixed: Gave this its own unique instance name to prevent overwriting
+        self.vert_scrollbar = tk.Scrollbar(self.INTERFACE, orient="vertical", command=self.shoppinglistcanvas.yview)
+        self.shoppinglistcanvas.configure(yscrollcommand=self.vert_scrollbar.set)
 
-
-
-        def checkIfMatching(*args):
-            for widget in self.scroll_frame.winfo_children():
-                widget.destroy()
-            self.matchingIngredients = {}
-            search_term = self.search_var.get().lower()
-
-            for part, category in self.ingredients.items():
-                if search_term in part.lower():
-                    self.matchingIngredients[part] = category
-            column = 0
-            for name, kategorie in self.matchingIngredients.items():
-                
-               
-                
-                if self.DEBUG:
-                    print(name)
-                    print(kategorie)
-
-                if kategorie[1] == False:
-                    tk.Button(self.scroll_frame, text=name, height=15, width=20, padx=10, command=lambda ingredient=name: addtoShoppingList(ingredient=ingredient)).grid(row=1, column=column, sticky="s")
-                    column += 1
-
-
-        def addtoShoppingList(ingredient):
-            self.ingredients[f"{ingredient}"] = [self.ingredients[f"{ingredient}"][0], [True, simpledialog.askstring("Notizen", "Willst du noch Notizen hinzufügen?")]]
-            with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
-                json.dump(self.ingredients, f, ensure_ascii=False, indent=4)
-            self.Ingredients()
-
-        def removefromShoppingList(ingredient):
-            self.ingredients[f"{ingredient}"] = [self.ingredients[f"{ingredient}"][0], False]
-            with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
-                json.dump(self.ingredients, f, ensure_ascii=False, indent=4)
-            self.Ingredients()
-        def askForCategory():
-            selected_item = self.tree.focus()
-            print(f"Test{self.tree.item(selected_item)}")
-            selected_item = self.tree.item(selected_item)["text"]
-            print(selected_item)
-            newIngredient = selected_item
-            
-            
-            if not newIngredient:
-                name = self.search_var.get()
-                category = simpledialog.askstring("Kategorie", f"Welcher Kategorie würdest du {name} zuordnen?")
-                if category:
-                    self.ingredients[name] = category
-                    checkIfMatching()
-
-                    with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
-                        json.dump(self.ingredients, f, ensure_ascii=False)
-
-            elif newIngredient:
-                print("NewIngredient:")
-                print(newIngredient)
-                Shopping[f"{newIngredient}"] = simpledialog.askstring("Beschreibung", "Willst du eine Beschreibung hinzufügen?\nFalls du willst, gib sie bitte hier ein.")
-
-        ingrediententry = tk.Entry(self.INTERFACE, width=self.breite-150, textvariable=self.search_var)
-        
-        self.search_var.trace_add("write", checkIfMatching)
-        ingrediententry.grid(row=1,column=0)
-
-        
-
-        tk.Label(self.INTERFACE, text="Einkaufsliste", font=("Arial", 15, "bold")).grid(row=4, column=0)
-
-        row = 0
-        column = 0
-
-        
-
-        self.shoppinglistcanvas = tk.Canvas(self.INTERFACE, width=self.breite-150, height=1000)
-        hoehe = self.shoppinglistcanvas.winfo_height()
-        
-        self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="vertical", command=self.shoppinglistcanvas.yview, )
-        self.shoppinglistcanvas.configure(yscrollcommand=self.scrollbar.set)
-        
-
-        
-        self.scrollbar.grid(row=6, column=3, sticky="ns")
-        self.shoppinglistcanvas.grid(row=6, column=0)
+        self.shoppinglistcanvas.grid(row=6, column=0, sticky="nsew", padx=10)
+        self.vert_scrollbar.grid(row=6, column=1, sticky="ns")
 
         scroll = tk.Frame(self.shoppinglistcanvas)
         self.shoppinglistcanvas.create_window((0, 0), window=scroll, anchor="nw")
 
-        for name, kategorie in self.ingredients.items():
+        # Dynamic scroll calculation trigger for Bottom Canvas
+        scroll.bind(
+            "<Configure>",
+            lambda e: self.shoppinglistcanvas.configure(scrollregion=self.shoppinglistcanvas.bbox("all"))
+        )
+
+        # --- ACTION MECHANICS & CALLBACKS ---
+        def checkIfMatching(*args):
+            # Clear matching section UI dynamically
+            for widget in self.scroll_frame.winfo_children():
+                widget.destroy()
                 
-               
+            self.matchingIngredients = {}
+            search_term = self.search_var.get().lower()
             
-            if self.DEBUG:
-                print(name)
-                print(kategorie)
+            if not search_term or search_term == "füge eine zutat hinzu":
+                return
 
-            if kategorie[1] == False:
-                continue
-            else:
-                print(name, kategorie)
-                tk.Button(scroll, text=f"""{name}
+            for part, category in self.ingredients.items():
+                if search_term in part.lower():
+                    self.matchingIngredients[part] = category
+
+            col_idx = 0
+            for name, kategorie in self.matchingIngredients.items():
+                # Check safely if item is initialized and not flagged on list
+                if len(kategorie) > 1 and kategorie[1] is False:
+                    # Setting reasonable heights so buttons don't clip your canvas bounds
+                    tk.Button(
+                        self.scroll_frame, 
+                        text=name, 
+                        height=2, 
+                        width=18, 
+                        padx=5, 
+                        command=lambda i=name: addtoShoppingList(ingredient=i)
+                    ).grid(row=0, column=col_idx, padx=5, pady=5, sticky="s")
+                    col_idx += 1
+
+        def addtoShoppingList(ingredient):
+            notes = simpledialog.askstring("Notizen", "Willst du noch Notizen hinzufügen?")
+            notes_content = notes if notes else ""
             
-{kategorie[1][1]}""", height=15, width=20, padx=10, command=lambda ingredient=name: removefromShoppingList(ingredient=ingredient)).grid(row=row, column=column)
-                column += 1
-                if column == 4:
-                    row += 1
-                    column = 0
+            # Match data mapping layout requirements safely
+            self.ingredients[str(ingredient)] = [self.ingredients[str(ingredient)][0], [True, notes_content]]
+            
+            with open(ingredients_path, mode="w", encoding="utf-8") as f:
+                json.dump(self.ingredients, f, ensure_ascii=False, indent=4)
+            self.Ingredients() # Reload cleanly
 
+        def removefromShoppingList(ingredient):
+            self.ingredients[str(ingredient)] = [self.ingredients[str(ingredient)][0], False]
+            
+            with open(ingredients_path, mode="w", encoding="utf-8") as f:
+                json.dump(self.ingredients, f, ensure_ascii=False, indent=4)
+            self.Ingredients() # Reload cleanly
+
+        # Text entry field configuration
+        ingrediententry = tk.Entry(self.INTERFACE, width=40, textvariable=self.search_var)
+        ingrediententry.grid(row=1, column=0, pady=5, padx=10, sticky="w")
+        
+        # Trace logic binds strictly after functional callbacks initialize
+        self.search_var.trace_add("write", checkIfMatching)
+
+        # --- RENDER EINKAUFSLISTE CARDS ---
+        row_idx = 0
+        col_idx = 0
+
+        for name, kategorie in self.ingredients.items():
+            if isinstance(kategorie, list) and len(kategorie) > 1 and kategorie[1] != False:
+                note_text = kategorie[1][1] if len(kategorie[1]) > 1 else ""
+                display_label = f"{name}\n\n({note_text})" if note_text else f"{name}"
+                
+                tk.Button(
+                    scroll, 
+                    text=display_label, 
+                    height=4, 
+                    width=18, 
+                    padx=5, 
+                    pady=5,
+                    wraplength=120,
+                    command=lambda i=name: removefromShoppingList(ingredient=i)
+                ).grid(row=row_idx, column=col_idx, padx=5, pady=5)
+                
+                col_idx += 1
+                if col_idx == 4:
+                    row_idx += 1
+                    col_idx = 0
+    
 
 
 
         
 
+    def askforImage(self):
+        
+        file_path = filedialog.askopenfilename(
+            filetypes=[("Alle Bilder", "*.png *.jpg *.jpeg *.bmp *.gif *.tiff *.webp")]
+        )
 
+        if not file_path:
+            return
+
+        img = Image.open(file_path).convert("RGBA")
+
+        # --- skalieren auf 514x514 ---
+        img = img.resize((514, 514), Image.Resampling.LANCZOS)
+
+        base = os.path.splitext(file_path)[0]
+        new_path = base + ".png"
+
+        img.save(new_path, "PNG")
+
+        self.image = new_path
+            
 
 
     def Create(self, event=None):
@@ -1100,16 +1069,12 @@ class RecipeFinder:
                     print(name)
                     print(kategorie)
             
-        def askforImage():
-            self.image = filedialog.askopenfilename(filetypes=[("Bilder im PNG-Format", "*.png")])
-
-            
-            
         
-
 
         def save():
             index = self.Listbox.curselection()
+            if not index:
+                return
             category = self.Listbox.get(index)
             self.ziel = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{self.NewRecipeTitle.get()}.png"
             with open(self.image, 'rb') as f_src:
@@ -1117,7 +1082,7 @@ class RecipeFinder:
                     f_dst.write(f_src.read())
 
             with open(f"{self.dir_name}/RecipeFinder/Recipes/{self.NewRecipeTitle.get()}.json", mode="w", encoding="utf-8") as f:
-                json.dump({"Title": f"{self.NewRecipeTitle.get()}", "Description": f"{self.NewRecipe.get(1.0, "end")}", "Category": f"{category.replace(" ", "")}", "Ingredients": RecipeIngredients, "Liked": False}, f, indent=4,ensure_ascii=False)
+                json.dump({"Title": f"{self.NewRecipeTitle.get()}", "Description": f"{self.NewRecipe.get(1.0, "end")}", "Category": f"{category.replace(" ", "")}", "Ingredients": RecipeIngredients, "Liked": False, "Done": False}, f, indent=4,ensure_ascii=False)
             self.openRecipe(recipe=self.NewRecipeTitle.get())
         def askForCategory():
             selected_item = self.tree.focus()
@@ -1185,7 +1150,7 @@ class RecipeFinder:
         self.NewRecipe.grid(row=1,column=1, padx=40,pady=20)
 
         tk.Label(recipeframe, text="Bild hinzufügen", image=self.pictograms[3], compound="left").grid(row=2, column=0)
-        addimagebutton = ttk.Button(recipeframe, text="Bild hinzufügen", image=self.pictograms["Image"], compound="left", command=askforImage)
+        addimagebutton = ttk.Button(recipeframe, text="Bild hinzufügen", image=self.pictograms["Image"], compound="left", command=self.askforImage)
         addimagebutton.grid(row=2,column=1, pady=20)
 
         tk.Label(recipeframe, text="Kategorie hinzufügen", image=self.pictograms[4], compound="left").grid(row=3, column=0)
