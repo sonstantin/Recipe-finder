@@ -15,9 +15,21 @@ class RecipeFinder:
         self.standart_color = "#117a91"
         self.highlight_color = "#145563"
         self.dir_name = os.path.dirname(os.path.realpath(__file__))
+        def ask_for_server():
+            self.serveryn = messagebox.askyesno("Server", "Willst du RecipeFinder auf einem Server laufen lassen?")
+            if self.serveryn == True:
+                ip = simpledialog.askstring("IP", "Was ist die IP des Servers?")
+                port = simpledialog.askinteger("Port", "Unter welchem Port soll RecipeFinder laufen?")
+                messagebox.showinfo("Passwort", "Das Passwort wird jedes mal abgefragt.")
+                with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="w", encoding="utf-8") as f:
+                    json.dump({"language": "Deutsch", "IP": ip, "Port": port, "Server": True}, f)
+            else:
+                with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="w", encoding="utf-8") as f:
+                    json.dump({"language": "Deutsch", "Server": False}, f)
         try:
             #dummy
 
+            
             loaded = os.open(f"{self.dir_name}/RecipeFinder/Recipes",0)
             print(loaded)
             with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="r", encoding="utf-8") as f:
@@ -52,6 +64,7 @@ class RecipeFinder:
                 "Feiertagsessen": ["Gänsebraten", "Ente", "Falscher Hase", "Lasagne"]}
             with open(f"{self.dir_name}/RecipeFinder/categories.json", mode="w", encoding="utf-8") as f:
                 json.dump(self.categories, f, indent=4)
+            ask_for_server()
         self.master = master
         if self.DEBUG:
             print("Created Window")
