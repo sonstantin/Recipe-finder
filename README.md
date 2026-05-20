@@ -1,7 +1,7 @@
 # 🍲 Recipe Finder
 
-**Recipe Finder** ist eine moderne Desktop-Anwendung zum Verwalten, Suchen und Organisieren von Rezepten.
-Die App wurde mit Python und Tkinter entwickelt und bietet eine benutzerfreundliche Oberfläche mit Kategorien, Favoriten, Zutatenlisten und Bildunterstützung.
+**Recipe Finder** ist eine Desktop-Anwendung zum Verwalten, Suchen und Organisieren von Rezepten.
+Die Anwendung wurde mit Python und Tkinter entwickelt und bietet eine benutzerfreundliche Oberfläche mit Kategorien, Favoriten, Zutatenlisten und Bildunterstützung.
 
 ---
 
