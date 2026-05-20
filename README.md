@@ -15,7 +15,7 @@ Die App wurde mit Python und Tkinter entwickelt und bietet eine benutzerfreundli
 * 📜 Scrollbare Rezeptansicht
 * ➕ Eigene Rezepte erstellen
 * 💾 Speicherung aller Daten als JSON
-* 🌐 Optionaler Servermodus
+* 🌐 Vorbereitung für einen Servermodus
 * 🎨 Moderne Oberfläche mit SVG-Piktogrammen
 
 ---
@@ -103,21 +103,5 @@ Beispiel:
 * Vollbildmodus
 * Debug-Modus (`STRG + ALT + D`)
 
----
 
-## 🔧 Geplante Funktionen
-
-* Cloud-/Server-Synchronisierung
-* Mehrsprachigkeit
-* Rezeptbilder direkt importieren
-* Erweiterte Filtersuche
-* Automatische Einkaufslisten-Kategorien
-* Benutzerkonten
-
----
-
-
-## 📜 Lizenz
-
-Dieses Projekt steht unter der MIT-Lizenz.
 
