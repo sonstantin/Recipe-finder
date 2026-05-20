@@ -80,7 +80,7 @@ Beispiel:
 ```json
 {
     "Title": "Spaghetti Carbonara",
-    "Description": "Ein klassisches italienisches Nudelgericht.",
+    "Description": "Koche die Nudeln.",
     "Category": "Nudelgerichte",
     "Ingredients": {
         "Spaghetti": "500g",
