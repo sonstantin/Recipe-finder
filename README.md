@@ -30,6 +30,7 @@ Das Projekt verwendet folgende Python-Bibliotheken:
 * `os`
 * `Pillow`
 * `cairosvg`
+* `paramiko`
 
 Installation der benötigten Pakete:
 
