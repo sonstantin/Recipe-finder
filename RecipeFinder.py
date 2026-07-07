@@ -2,27 +2,34 @@ import tkinter as tk
 from tkinter import ttk
 import json, os
 from PIL import Image, ImageTk
-import cairosvg # type: ignore
+import paramiko
 import io
 from tkinter import messagebox, simpledialog,filedialog
+from svglib.svglib import svg2rlg
+from reportlab.graphics import renderPDF
+from reportlab.graphics import renderPM
 
 
 class RecipeFinder:
     def __init__(self, master):
+        self.ssh = None
+        self.sftp = None
 
         self.DEBUG = False
         self.didIngredients = False
         self.standart_color = "#117a91"
         self.highlight_color = "#145563"
         self.dir_name = os.path.dirname(os.path.realpath(__file__))
+        self.password = simpledialog.askstring("Passwort", "Was ist das Serverpasswort? Wenn du keinen Server hast, dann lass dieses Eingabefeld leer!", show="*")
         def ask_for_server():
             self.serveryn = messagebox.askyesno("Server", "Willst du RecipeFinder auf einem Server laufen lassen?")
             if self.serveryn == True:
                 ip = simpledialog.askstring("IP", "Was ist die IP des Servers?")
                 port = simpledialog.askinteger("Port", "Unter welchem Port soll RecipeFinder laufen?")
+                user = simpledialog.askstring("Nutzer", "Wer ist der User?")
                 messagebox.showinfo("Passwort", "Das Passwort wird jedes mal abgefragt.")
                 with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="w", encoding="utf-8") as f:
-                    json.dump({"language": "Deutsch", "IP": ip, "Port": port, "Server": True}, f)
+                    json.dump({"language": "Deutsch", "IP": ip, "Port": port, "User": user, "Server": True}, f)
             else:
                 with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="w", encoding="utf-8") as f:
                     json.dump({"language": "Deutsch", "Server": False}, f)
@@ -72,7 +79,7 @@ class RecipeFinder:
         if self.DEBUG:
             print(f"Running in {self.dir_name}")
         
-        self.master.title("Recipe Finder by Mathilda Braun")
+        self.master.title("Recipe Finder")
         self.pictograms = {
             "Search": f"{self.dir_name}/RecipeFinder/Pictograms/search.svg",
             "Home": f"{self.dir_name}/RecipeFinder/Pictograms/home.svg",
@@ -91,12 +98,44 @@ class RecipeFinder:
             "Ingredient": f"{self.dir_name}/RecipeFinder/Pictograms/strawberry.svg",
             "Liked": f"{self.dir_name}/RecipeFinder/Pictograms/favorite--filled.svg",
             "Start": f"{self.dir_name}/RecipeFinder/Pictograms/play.svg",
+            "Upload": f"{self.dir_name}/RecipeFinder/Pictograms/cloud--upload.svg",
+            "Casserole": f"{self.dir_name}/RecipeFinder/Pictograms/casseroles.svg",
+            "Fast": f"{self.dir_name}/RecipeFinder/Pictograms/cup.svg",
+            "Dessert": f"{self.dir_name}/RecipeFinder/Pictograms/dessert.svg",
+            "Festival": f"{self.dir_name}/RecipeFinder/Pictograms/festive--dish.svg",
+            "Pan": f"{self.dir_name}/RecipeFinder/Pictograms/pan.svg",
+            "Rice": f"{self.dir_name}/RecipeFinder/Pictograms/rice.svg",
+            "Soup": f"{self.dir_name}/RecipeFinder/Pictograms/soup.svg",
         }
 
         for part in self.pictograms:
-            self.pictograms[part] = cairosvg.svg2png(url=self.pictograms[part])
-            image = Image.open(io.BytesIO(self.pictograms[part]))
+            # 1. SVG-Datei einlesen und temporär im RAM als PNG rendern
+            drawing = svg2rlg(f"{self.pictograms[part]}")
+            bild_stream = io.BytesIO()
+            renderPM.drawToFile(drawing, bild_stream, fmt="PNG")
+            bild_stream.seek(0)
+            
+            # 2. Bild mit Pillow öffnen und in das RGBA-Format (mit Transparenzkanal) konvertieren
+            image = Image.open(bild_stream).convert("RGBA")
+            daten = image.getdata()
+            
+            # 3. Den weißen Hintergrund (255, 255, 255) herausschneiden
+            neue_daten = []
+            for pixel in daten:
+                # Wenn der Pixel rein weiß ist, setzen wir den Alpha-Kanal (Transparenz) auf 0
+                if pixel[0] == 255 and pixel[1] == 255 and pixel[2] == 255:
+                    neue_daten.append((255, 255, 255, 0))
+                else:
+                    neue_daten.append(pixel)
+                    
+            image.putdata(neue_daten)
+            
+            # 4. Das transparente Bild direkt für Tkinter speichern
             self.pictograms[part] = ImageTk.PhotoImage(image)
+            
+            # Buffer schließen, um Arbeitsspeicher freizugeben
+            bild_stream.close()
+
         self.breite = 0
         self.hoehe = 0
         
@@ -124,7 +163,7 @@ class RecipeFinder:
 
             self.Search()
         
-
+        
         if self.DEBUG:
             print(f"Settings Inhalt: {self.settings}")
             print(f"Categories Inhalt: {len(self.categories)} Kategorien erstellt")
@@ -135,6 +174,7 @@ class RecipeFinder:
 
         if self.DEBUG:
             self.INTERFACE.config(bg="green")
+        self.connect_server()
 
         sidebars = tk.Canvas(self.master, width=150)
         sidebars.pack(side=tk.RIGHT, fill=tk.Y)
@@ -182,6 +222,148 @@ class RecipeFinder:
         self.recipes = {}
         self.Search()
         self.images = {}
+
+        self.synchronise()
+
+    
+    def connect_server(self):
+        if self.sftp is not None:
+            return
+
+        with open(f"{self.dir_name}/RecipeFinder/settings.json", encoding="utf-8") as f:
+            data = json.load(f)
+
+        if not data.get("Server"):
+            return
+        if self.password == "":
+            print("Es kann nicht auf die Serverfunktionen zugegriffen werden.")
+            return
+        password = self.password
+
+        if self.DEBUG:
+            yn = messagebox.askyesno("Passwort", "Soll auch das Passwort in der Konsole ausgegeben werden?")
+            
+            print(f"\nHost: {data["IP"]}")
+            print(f"Port: {data["Port"]}")
+            print(f"Nutzername: {data["User"]}")
+            if yn:
+                print(f"Passwort: {self.password}\n")
+            else:
+                print("Das Passwort wird aus Sicherheitsgründen nicht angegeben.\n")
+        try:
+            self.ssh = paramiko.SSHClient()
+            self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+            self.ssh.connect(
+                hostname=data["IP"],
+                port=data["Port"],
+                username=data["User"],
+                password=password
+            )
+
+            self.sftp = self.ssh.open_sftp()
+        except Exception as e:
+            messagebox.showerror("Fehler", f"Dieser Fehler ist aufgetreten: \n{e}")
+            quit()
+    
+    def download(self):
+        with open(f"{self.dir_name}/RecipeFinder/settings.json", "r", encoding="utf-8") as f:
+            data = json.load(f)
+
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        password = self.password
+
+        ssh.connect(
+            hostname=data["IP"],
+            port=data["Port"],
+            username=data["User"],
+            password=password
+        )
+
+        sftp = ssh.open_sftp()
+
+        try:
+            sftp.get(
+                "./RecipeFinder/Ingredients/ingredients.json",
+                f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json"
+            )
+
+            sftp.get(
+                "./RecipeFinder/Ingredients/shoppingList.json",
+                f"{self.dir_name}/RecipeFinder/Ingredients/shoppingList.json"
+            )
+        finally:
+            sftp.close()
+            ssh.close()
+
+    def upload(self, Recipe, Shopping):
+        
+        
+        with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="r", encoding="utf-8") as f:
+            data = json.load(f)
+        # Serverdaten
+        host = data["IP"]
+        port = data["Port"]
+        username = data["User"]
+        password = self.password
+
+        # Verbindungen aufbauen
+        ssh = paramiko.SSHClient()
+        ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+
+        ssh.connect(
+            hostname=host,
+            port=port,
+            username=username,
+            password=password
+        )
+
+        
+        sftp = ssh.open_sftp()
+        try:
+            sftp.mkdir("RecipeFinder")
+        except IOError:
+            pass
+
+        try:
+            sftp.mkdir("RecipeFinder/Recipes")
+        except IOError:
+            pass
+
+        try:
+            sftp.mkdir("RecipeFinder/Recipes/Pictures")
+        except IOError:
+            pass
+
+        try:
+            sftp.mkdir("RecipeFinder/Ingredients")
+        except IOError:
+            pass
+
+        
+        if Recipe:
+            sftp.put(f"{self.dir_name}/RecipeFinder/Recipes/{Recipe}.json", f"./RecipeFinder/Recipes/{Recipe}.json")
+            sftp.put(f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{Recipe}.png", f"./RecipeFinder/Recipes/Pictures/{Recipe}.png")
+        
+        if Shopping:
+            sftp.put(
+                f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json",
+                "./RecipeFinder/Ingredients/ingredients.json"
+            )
+
+            sftp.put(
+                f"{self.dir_name}/RecipeFinder/Ingredients/shoppingList.json",
+                "./RecipeFinder/Ingredients/shoppingList.json"
+            )
+            
+
+        # schließen
+        sftp.close()
+        ssh.close()
+
+        print("Upload fertig")
     
     def update(self):
         self.master.update_idletasks()
@@ -209,19 +391,38 @@ class RecipeFinder:
         self.searchEntry = ttk.Entry(self.INTERFACE, textvariable=self.search_var)
         
         self.searchEntry.grid(row=0, column=0, sticky="ew")
-        original_img = cairosvg.svg2png(url=f"{self.dir_name}/RecipeFinder/Pictograms/search.svg")
-        original_img = Image.open(io.BytesIO(original_img))
         
+        # 1. SVG-Datei über svglib im RAM rendern
+        drawing = svg2rlg(f"{self.dir_name}/RecipeFinder/Pictograms/search.svg")
+        bild_stream = io.BytesIO()
+        renderPM.drawToFile(drawing, bild_stream, fmt="PNG")
+        bild_stream.seek(0)
         
-        # 2. Größe ändern (z. B. auf 16x16 Pixel)
-
-        original_img= original_img.resize((16, 16)) 
-        self.pictograms["Small_Search"]  = ImageTk.PhotoImage(original_img)
+        # 2. Bild mit Pillow öffnen und in RGBA (Transparenz) konvertieren
+        original_img = Image.open(bild_stream).convert("RGBA")
+        daten = original_img.getdata()
+        
+        # 3. Weiß (255, 255, 255) herausschneiden (für transparenten Hintergrund)
+        neue_daten = []
+        for pixel in daten:
+            if pixel[0] == 255 and pixel[1] == 255 and pixel[2] == 255:
+                neue_daten.append((255, 255, 255, 0))  # Transparent machen
+            else:
+                neue_daten.append(pixel)
+        original_img.putdata(neue_daten)
+        bild_stream.close()  # RAM-Buffer freigeben
+        
+        # 4. Größe auf 16x16 Pixel ändern
+        original_img = original_img.resize((16, 16)) 
+        
+        # 5. Für Tkinter konvertieren und im Canvas platzieren
+        self.pictograms["Small_Search"] = ImageTk.PhotoImage(original_img)
         searchimagecanvas = tk.Canvas(self.INTERFACE, width=20, height=20)
-        searchimagecanvas.place(x="63.15c",y=0)
-        searchimagecanvas.create_image(0,0,anchor="nw",image=self.pictograms["Small_Search"])
+        searchimagecanvas.place(x="63.15c", y=0)
+        searchimagecanvas.create_image(0, 0, anchor="nw", image=self.pictograms["Small_Search"])
 
         searchimagecanvas.bind("<Button-1>", self.doTheSearch)
+
         if self.DEBUG:
             searchimagecanvas.config(bg="orange")
         
@@ -241,10 +442,38 @@ class RecipeFinder:
                 print(category)
             if category == "Nudelgerichte":
                 picture = self.pictograms["Noodles"]
+            elif category == "unter 20 Minuten":
+                picture = self.pictograms["Fast"]
+            elif category == "Desserts":
+                picture = self.pictograms["Dessert"]
+            elif category == "Suppen":
+                picture = self.pictograms["Soup"]
+            elif category == "Reisgerichte":
+                picture = self.pictograms["Rice"]
+            elif category == "Gebratenes":
+                picture = self.pictograms["Pan"]
+            elif category == "Aufläufe":
+                picture = self.pictograms["Casserole"]
+            elif category == "Feiertagsessen":
+                picture = self.pictograms["Festival"]
             else:
-                picture = ""
-            categoriebuttons[f"{category}"] = ttk.Button(buttonFrame, text=f"{category}", image = picture, padding=15, compound="right", command=lambda categorie=category: self.opencategorie(categorie=categorie))
-            categoriebuttons[f"{category}"].grid(row=placerow, column=placecolumn, padx=15, pady=20)
+                picture = ""  # Für alle Kategorien ohne Icon
+
+            # Button-Erstellung bleibt gleich, nutzt jetzt aber das stabile 'picture'
+            categoriebuttons[category] = ttk.Button(
+                buttonFrame,
+                text=category, 
+                image=picture,
+                padding=15, 
+                compound="right", 
+                command=lambda categorie=category: self.opencategorie(categorie=categorie)
+            )
+            categoriebuttons[category].grid(row=placerow, column=placecolumn, padx=15, pady=20)
+
+            # WICHTIG: Tkinter-Schutz gegen Garbage Collection
+            if picture != "":
+                categoriebuttons[category].image = picture 
+
             placecolumn += 1
             if placecolumn == 2:
                 placecolumn = 0
@@ -413,23 +642,19 @@ class RecipeFinder:
         
         self.searchEntry = ttk.Entry(self.INTERFACE, width=self.breite-180)
         
-        self.searchEntry.pack()
-        original_img = cairosvg.svg2png(url=f"{self.dir_name}/RecipeFinder/Pictograms/search.svg")
-        original_img = Image.open(io.BytesIO(original_img))
-        original_img = original_img.resize((16, 16)) 
-        self.pictograms["Small_Search"]  = ImageTk.PhotoImage(original_img)
-        searchimagecanvas = tk.Canvas(self.INTERFACE, width=20, height=20)
-        searchimagecanvas.place(x="63.15c",y=0)
-        searchimagecanvas.create_image(0,0,anchor="nw",image=self.pictograms["Small_Search"])
+        
 
-        searchimagecanvas.bind("<Button-1>", self.doTheSearch)
+        
 
         # 2. Alle Dateien finden (Bilder ausschließen)
         alle_dateien = []
         path = f'{self.dir_name}/RecipeFinder/Recipes'
+        files = self.sftp.listdir("./RecipeFinder/Recipes")
         for root, dirs, files in os.walk(path):
             for file in files:
+                print(file)
                 full_path = os.path.join(root, file)
+
                 if "Pictures" not in full_path:
                     alle_dateien.append(full_path)
 
@@ -640,7 +865,72 @@ class RecipeFinder:
                 continue
 
         
+    def synchronise(self):
+        import stat
         
+        # === SCHRITT 1: LOKALE ORDNER-STRUKTUR RECHTZEITIG AUFBAUEN ===
+        LOCAL_RECIPES = f"{self.dir_name}/RecipeFinder/Recipes"
+        LOCAL_PICTURES = f"{self.dir_name}/RecipeFinder/Recipes/Pictures"
+        
+        # Immer zuerst den Hauptordner, dann den Unterordner erstellen!
+        if not os.path.exists(LOCAL_RECIPES):
+            os.makedirs(LOCAL_RECIPES)
+        if not os.path.exists(LOCAL_PICTURES):
+            os.makedirs(LOCAL_PICTURES)
+
+        # === SCHRITT 2: ERSTER BLOCK - BILDER HERUNTERLADEN ===
+        REMOTE_PICTURES = "./RecipeFinder/Recipes/Pictures" 
+        print(f"Lese Bildverzeichnis aus: {REMOTE_PICTURES}")
+        
+        try:
+            entries_pics = self.sftp.listdir_attr(REMOTE_PICTURES)
+            download_pics_count = 0
+            
+            for entry in entries_pics:
+                filename = entry.filename
+                
+                # Ordner in Pictures überspringen
+                if stat.S_ISDIR(entry.st_mode):
+                    continue
+                    
+                remote_file_path = f"{REMOTE_PICTURES}/{filename}".replace("//", "/")
+                local_file_path = os.path.join(LOCAL_PICTURES, filename)
+                
+                print(f"Lade Bild herunter: {filename}")
+                self.sftp.get(remote_file_path, local_file_path)
+                download_pics_count += 1
+                
+            print(f"-> {download_pics_count} Bilder erfolgreich synchronisiert.\n")
+        except Exception as e:
+            print(f"Fehler im Bilder-Block (wird übersprungen): {e}")
+
+        # === SCHRITT 3: ZWEITER BLOCK - REZEPTE HERUNTERLADEN ===
+        REMOTE_RECIPES = "./RecipeFinder/Recipes" 
+        print(f"Lese Rezeptverzeichnis aus: {REMOTE_RECIPES}")
+        
+        try:
+            entries_recipes = self.sftp.listdir_attr(REMOTE_RECIPES)
+            download_recipes_count = 0
+            
+            for entry in entries_recipes:
+                filename = entry.filename
+                
+                # Das ist die kritische Stelle: 'Pictures/' wird hier völlig zurecht übersprungen!
+                if stat.S_ISDIR(entry.st_mode):
+                    print(f"Überspringe Unterordner: {filename}/")
+                    continue
+                    
+                remote_file_path = f"{REMOTE_RECIPES}/{filename}".replace("//", "/")
+                local_file_path = os.path.join(LOCAL_RECIPES, filename)
+                
+                print(f"Lade Rezept herunter: {filename}")
+                self.sftp.get(remote_file_path, local_file_path)
+                download_recipes_count += 1
+                
+            print(f"-> {download_recipes_count} Rezeptdateien erfolgreich synchronisiert.")
+        except Exception as e:
+            print(f"Fehler im Rezept-Block: {e}")
+
     def create_recipe_card(self, parent, recipe, title, photo, orig, row, column):
         # Setting an explicit size for the card prevents Tkinter frames from collapsing
         frame = tk.Frame(parent, relief="solid", borderwidth=1, width=self.breite/2, height=self.hoehe/2)
@@ -882,9 +1172,13 @@ class RecipeFinder:
 
     
     def Ingredients(self, event=None):
-        # 1. Wipe previous widgets cleanly
         for widget in self.INTERFACE.winfo_children():
             widget.destroy()
+        self.download()
+        
+        
+        
+        
 
         if self.DEBUG:
             print("INGREDIENTS")
@@ -978,6 +1272,7 @@ class RecipeFinder:
                         command=lambda i=name: addtoShoppingList(ingredient=i)
                     ).grid(row=0, column=col_idx, padx=5, pady=5, sticky="s")
                     col_idx += 1
+            
 
         def addtoShoppingList(ingredient):
             notes = simpledialog.askstring("Notizen", "Willst du noch Notizen hinzufügen?")
@@ -990,6 +1285,8 @@ class RecipeFinder:
                 json.dump(self.ingredients, f, ensure_ascii=False, indent=4)
             self.Ingredients() # Reload cleanly
 
+            self.upload(Recipe=None, Shopping=True)
+
         def removefromShoppingList(ingredient):
             self.ingredients[str(ingredient)] = [self.ingredients[str(ingredient)][0], False]
             
@@ -997,9 +1294,13 @@ class RecipeFinder:
                 json.dump(self.ingredients, f, ensure_ascii=False, indent=4)
             self.Ingredients() # Reload cleanly
 
+            self.upload(Recipe=None, Shopping=True)
+
         # Text entry field configuration
         ingrediententry = tk.Entry(self.INTERFACE, width=40, textvariable=self.search_var)
         ingrediententry.grid(row=1, column=0, pady=5, padx=10, sticky="w")
+
+        
         
         # Trace logic binds strictly after functional callbacks initialize
         self.search_var.trace_add("write", checkIfMatching)
@@ -1055,9 +1356,12 @@ class RecipeFinder:
 
         self.image = new_path
             
-
+    
 
     def Create(self, event=None):
+        def saveonserver():
+            title = save()
+            self.upload(Recipe=title, Shopping=None)
         RecipeIngredients = {}
         # 1. Die StringVar definieren
         self.search_var = tk.StringVar()
@@ -1085,18 +1389,20 @@ class RecipeFinder:
         
 
         def save():
+            title = self.NewRecipeTitle.get()
             index = self.Listbox.curselection()
             if not index:
                 return
             category = self.Listbox.get(index)
-            self.ziel = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{self.NewRecipeTitle.get()}.png"
+            self.ziel = f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{title}.png"
             with open(self.image, 'rb') as f_src:
                 with open(self.ziel, 'wb') as f_dst:
                     f_dst.write(f_src.read())
 
-            with open(f"{self.dir_name}/RecipeFinder/Recipes/{self.NewRecipeTitle.get()}.json", mode="w", encoding="utf-8") as f:
-                json.dump({"Title": f"{self.NewRecipeTitle.get()}", "Description": f"{self.NewRecipe.get(1.0, "end")}", "Category": f"{category.replace(" ", "")}", "Ingredients": RecipeIngredients, "Liked": False, "Done": False}, f, indent=4,ensure_ascii=False)
-            self.openRecipe(recipe=self.NewRecipeTitle.get())
+            with open(f"{self.dir_name}/RecipeFinder/Recipes/{title}.json", mode="w", encoding="utf-8") as f:
+                json.dump({"Title": f"{title}", "Description": f"{self.NewRecipe.get(1.0, "end")}", "Category": f"{category.replace(" ", "")}", "Ingredients": RecipeIngredients, "Liked": False, "Done": False}, f, indent=4,ensure_ascii=False)
+            self.openRecipe(recipe=title)
+            return title
         def askForCategory():
             selected_item = self.tree.focus()
             print(f"Test{self.tree.item(selected_item)}")
@@ -1173,6 +1479,8 @@ class RecipeFinder:
         tk.Label(recipeframe, text="Speichern", image=self.pictograms[5], compound="left").grid(row=4, column=0, padx=40, pady=20)
         saveButton = ttk.Button(recipeframe, text="Speichern", image=self.pictograms["Save"], compound="left", command=save)
         saveButton.grid(row=4, column=1)
+        saveonServerButton = ttk.Button(recipeframe, text="Auf Server Speichern", image=self.pictograms["Upload"], compound="left", command=saveonserver)
+        saveonServerButton.grid(row=4, column=2)
 
         for category in self.categories:
             category = category.center(70)
