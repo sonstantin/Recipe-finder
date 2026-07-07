@@ -1,0 +1,21 @@
+{
+    "Gurke": [
+        "Gemüse",
+        false
+    ],
+    "Nudeln": [
+        "Nötiges",
+        false
+    ],
+    "Miso-Paste": [
+        "Asia-Zeug",
+        false
+    ],
+    "Gummibärchen": [
+        "Sußigkeiten",
+        [
+            true,
+            "500kg"
+        ]
+    ]
+}

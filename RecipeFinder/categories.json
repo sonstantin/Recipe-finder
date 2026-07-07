@@ -1,0 +1,87 @@
+{
+    "Suppen": [
+        "Soups",
+        "Suppe",
+        "K\u00fcrbissuppe",
+        "Tomatensuppe",
+        "Curry"
+    ],
+    "unter 20 Minuten": [
+        "schnell",
+        "fast",
+        "unter 20 Minuten"
+    ],
+    "Nudelgerichte": [
+        "Bratnudeln",
+        "Soba",
+        "Spaghetti",
+        "Pasta",
+        "Nudeln",
+        "Eiernudeln",
+        "Canneloni",
+        "Nudelauflauf",
+        "Capellini",
+        "Farfalle",
+        "Fettucine",
+        "Fusilli",
+        "Gnocchi",
+        "Lasagne",
+        "Linguine",
+        "Maccheroni",
+        "Orecchiette",
+        "Paccheri",
+        "Pappardelle",
+        "Penne",
+        "Ravioli",
+        "Rigatoni",
+        "Spaghettini",
+        "Tagliatelle",
+        "Tortellini",
+        "Tortelloni",
+        "Ramen",
+        "Udon"
+    ],
+    "Aufl\u00e4ufe": [
+        "Lasagne",
+        "Gigantes",
+        "Nudelauflauf"
+    ],
+    "Desserts": [
+        "Pudding",
+        "Schokolade",
+        "Marmelade",
+        "Kuchen",
+        "Muffin",
+        "Muffins",
+        "Baumkuchen",
+        "Joghurt",
+        "Pfannkuchen",
+        "Faschingskrapfen"
+    ],
+    "Gebratenes": [
+        "Soba",
+        "Bratnudeln",
+        "Gem\u00fcsepfanne",
+        "Pfanne",
+        "Pfannkuchen",
+        "Eierkuchen",
+        "Steak",
+        "Braten",
+        "Pommes",
+        "Chicken Nuggets"
+    ],
+    "Reisgerichte": [
+        "Reis",
+        "Curry",
+        "Vollkornreis",
+        "H\u00fchnerfrikassee",
+        "Don",
+        "Sushi"
+    ],
+    "Feiertagsessen": [
+        "G\u00e4nsebraten",
+        "Ente",
+        "Falscher Hase",
+        "Lasagne"
+    ]
+}

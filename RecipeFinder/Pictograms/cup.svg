@@ -1,0 +1,14 @@
+<svg id="icon" xmlns="http://www.w3.org/2000/svg" width="32" height="32" viewBox="0 0 32 32">
+  <defs>
+    <style>.cls-1{fill:none;}</style>
+  </defs>
+  <title>fast-food-container</title>
+  <!-- Umwandlung der Konturen in solide Carbon-Flächen -->
+  <path d="M10.05,13l2.62,14h6.66l2.62-14H10.05z M13.88,25l-1.87-10h8l-1.87,10H13.88z"/>
+  <path d="M6,11h20v2H6V11z"/>
+  <path d="M7,12h2l-2-4h4v-2H4.13L7,12z"/>
+  <path d="M10,16h12v2H10V16z"/>
+  <path d="M11,20h10v2H11V20z"/>
+  <rect id="_Transparent_Rectangle_" data-name="&lt;Transparent Rectangle&gt;" class="cls-1" width="32" height="32"/>
+</svg>
+
