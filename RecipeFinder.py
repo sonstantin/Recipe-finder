@@ -243,9 +243,9 @@ class RecipeFinder:
         if self.DEBUG:
             yn = messagebox.askyesno("Passwort", "Soll auch das Passwort in der Konsole ausgegeben werden?")
             
-            print(f"\nHost: {data["IP"]}")
-            print(f"Port: {data["Port"]}")
-            print(f"Nutzername: {data["User"]}")
+            print(f"\nHost: {data['IP']}")
+            print(f"Port: {data['Port']}")
+            print(f"Nutzername: {data['User']}")
             if yn:
                 print(f"Passwort: {self.password}\n")
             else:
