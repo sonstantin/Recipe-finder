@@ -34,8 +34,9 @@ class RecipeFinder:
                 with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="w", encoding="utf-8") as f:
                     json.dump({"language": "Deutsch", "Server": False}, f)
         try:
-            loaded = os.open(f"{self.dir_name}/RecipeFinder/Recipes",0)
-            print(loaded)
+            if not os.path.exists(f"{self.dir_name}/RecipeFinder/Recipes"):
+                raise FileNotFoundError
+            
             with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="r", encoding="utf-8") as f:
                 self.settings = json.load(f)
             with open(f"{self.dir_name}/RecipeFinder/categories.json", mode="r", encoding="utf-8") as f:
@@ -231,14 +232,17 @@ class RecipeFinder:
         if self.DEBUG:
             yn = messagebox.askyesno("Passwort", "Soll auch das Passwort in der Konsole ausgegeben werden?")
             
-            print(f"\nHost: {data["IP"]}")
-            print(f"Port: {data["Port"]}")
-            print(f"Nutzername: {data["User"]}")
+            print(f"\nHost: {data['IP']}")
+            print(f"Port: {data['Port']}")
+            print(f"Nutzername: {data['User']}")
             if yn:
                 print(f"Passwort: {self.password}\n")
             else:
                 print("Das Passwort wird aus Sicherheitsgründen nicht angegeben.\n")
+        if not data.get("Server") or self.password == "":
+                return
         try:
+            
             self.ssh = paramiko.SSHClient()
             self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
 
@@ -287,10 +291,13 @@ class RecipeFinder:
             ssh.close()
 
     def upload(self, Recipe, Shopping):
-        
-        
+
         with open(f"{self.dir_name}/RecipeFinder/settings.json", mode="r", encoding="utf-8") as f:
             data = json.load(f)
+
+        if not data.get("Server") or self.password == "":
+            return
+
         host = data["IP"]
         port = data["Port"]
         username = data["User"]
@@ -389,7 +396,7 @@ class RecipeFinder:
         searchimagecanvas = tk.Canvas(self.INTERFACE, width=20, height=20)
         searchimagecanvas.place(x="63.15c", y=0)
         searchimagecanvas.create_image(0, 0, anchor="nw", image=self.pictograms["Small_Search"])
-
+        
         searchimagecanvas.bind("<Button-1>", self.doTheSearch)
 
         if self.DEBUG:
@@ -472,47 +479,56 @@ class RecipeFinder:
 
             text["Liked"] = favorite
 
-            generateButtons()
-
             
 
-
-        img = tk.PhotoImage(file=f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{recipe}.png")
         self.recipecanvas = tk.Canvas(self.INTERFACE)
         self.scrollbar = tk.Scrollbar(self.INTERFACE, orient="vertical", command=self.recipecanvas.yview)
         self.recipecanvas.configure(yscrollcommand=self.scrollbar.set)
-        
-        
+
         try:
-            with open(f"{self.dir_name}/RecipeFinder/Recipes/{recipe}.json", mode="r",encoding="utf-8") as f:
+            with open(f"{self.dir_name}/RecipeFinder/Recipes/{recipe}.json", mode="r", encoding="utf-8") as f:
                 text = json.load(f)
         except FileNotFoundError:
-            messagebox.showerror("Fehler", "Ein unerwarteter Fehler ist aufgetreten! Bitte melde das den Entwicklern auf\n https://github.com/sonstantin/Recipe-finder-by-Mathilda/issues")
-       
+            messagebox.showerror(
+                "Fehler",
+                "Ein unerwarteter Fehler ist aufgetreten! Bitte melde das den Entwicklern auf\nhttps://github.com/sonstantin/Recipe-finder-by-Mathilda/issues"
+            )
+            return
+
         self.scrollbar.pack(side="right", fill="y")
         self.recipecanvas.pack(side="left", fill="both", expand=True)
 
         self.scroll_frame = tk.Frame(self.recipecanvas)
         self.recipecanvas.create_window((0, 0), window=self.scroll_frame, anchor="nw")
 
-        
+        self.scroll_frame.bind(
+            "<Configure>",
+            lambda e: self.recipecanvas.configure(scrollregion=self.recipecanvas.bbox("all"))
+        )
+        self.recipecanvas.bind_all(
+            "<MouseWheel>",
+            lambda e: self.recipecanvas.yview_scroll(int(-1 * (e.delta / 120)), "units")
+        )
 
-        
-        self.scroll_frame.bind("<Configure>", lambda e: self.recipecanvas.configure(scrollregion=self.recipecanvas.bbox("all")))
-        self.recipecanvas.bind_all("<MouseWheel>", lambda e: self.recipecanvas.yview_scroll(int(-1*(e.delta/120)), "units"))
-        
+        try:
+            img = tk.PhotoImage(
+                file=f"{self.dir_name}/RecipeFinder/Recipes/Pictures/{recipe}.png"
+            )
+        except tk.TclError:
+            img = None
 
+        if img is not None:
+            label = tk.Label(self.scroll_frame, image=img)
+            label.pack()
+            label.image = img
 
-        # BILD (im scroll_frame)
-        label = tk.Label(self.scroll_frame, image=img)
-        label.pack()
-        label.image = img 
-        tk.Label(self.scroll_frame, text=text["Title"], font=("Arial", 14, "bold")).pack()
+        tk.Label(self.scroll_frame, text=f"{text['Category'].replace("unter20Minuten", "unter 20 Minuten")}: {text['Title']}", font=("Arial", 14, "bold")).pack()
         tk.Label(self.scroll_frame, text=text["Description"], pady=10).pack()
+
         self.ingredients_vars = {}
+
         for ingredient, amount in text["Ingredients"].items():
             var = tk.BooleanVar()
-
 
             cb = tk.Checkbutton(
                 self.scroll_frame,
@@ -521,28 +537,77 @@ class RecipeFinder:
             )
 
             cb.pack(anchor="w", padx=20)
-            self.ingredients_vars[f"{ingredient}"] = var
-
-            
+            self.ingredients_vars[ingredient] = var
 
         def addToShoppingList():
 
             with open(f"{self.dir_name}/RecipeFinder/Recipes/{recipe}.json", mode="r", encoding="utf-8") as f:
                 data = json.load(f)
+
             data["Done"] = True
+
             with open(f"{self.dir_name}/RecipeFinder/Recipes/{recipe}.json", mode="w", encoding="utf-8") as f:
                 json.dump(data, f, ensure_ascii=False, indent=4)
 
             for ingredient, amount in text["Ingredients"].items():
-                if self.ingredients_vars[f"{ingredient}"].get() == False:
+                if not self.ingredients_vars[ingredient].get():
                     try:
-                        self.ingredients[f"{ingredient}"] = [self.ingredients[f"{ingredient}"][0], [True, f"{amount}"]]
+                        self.ingredients[ingredient] = [
+                            self.ingredients[ingredient][0],
+                            [True, amount]
+                        ]
                     except KeyError:
-                        self.ingredients[f"{ingredient}"] = [simpledialog.askstring("Kategorie", f"Welcher Kategorie würdest du {ingredient} zuordnen?")][0], [True, f"{amount}"]
+                        self.ingredients[ingredient] = [
+                            simpledialog.askstring(
+                                "Kategorie",
+                                f"Welcher Kategorie würdest du {ingredient} zuordnen?"
+                            ),
+                            [True, amount]
+                        ]
 
-                    print(self.ingredients[f"{ingredient}"])
             with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
                 json.dump(self.ingredients, f, ensure_ascii=False, indent=4)
+
+        def generateButtons():
+            if hasattr(self, "Button") and self.Button is not None and self.Button.winfo_exists():
+                if text["Liked"]:
+                    self.Button.config(
+                        image=self.pictograms["Liked"],
+                        text="Aus Favoriten entfernen"
+                    )
+                else:
+                    self.Button.config(
+                        image=self.pictograms["Favorite"],
+                        text="Zu Favoriten hinzufügen"
+                    )
+            else:
+                self.Button = tk.Button(
+                    self.scroll_frame,
+                    image=self.pictograms["Liked" if text["Liked"] else "Favorite"],
+                    text="...",
+                    compound="left",
+                    command=toggle_favorite
+                )
+                self.Button.pack(pady=10)
+
+        
+
+        tk.Button(
+            self.scroll_frame,
+            text="Auf die Zutatenliste setzten",
+            image=self.pictograms["Start"],
+            compound="left",
+            command=addToShoppingList
+        ).pack()
+
+        self.scroll_frame.update_idletasks()
+        self.recipecanvas.config(scrollregion=self.recipecanvas.bbox("all"))
+
+        generateButtons()
+
+        self.INTERFACE.update_idletasks()
+        region = self.recipecanvas.bbox("all")
+        self.recipecanvas.config(scrollregion=region)
         def generateButtons():
             if hasattr(self, "Button") and self.Button is not None and self.Button.winfo_exists():
                 if text["Liked"]:
@@ -557,7 +622,7 @@ class RecipeFinder:
 
         generateButtons()
 
-        tk.Button(self.scroll_frame, text="Auf die Zutatenliste setzten", image=self.pictograms["Start"], compound="left", command=addToShoppingList).pack()
+        
         self.scroll_frame.update_idletasks()
         self.recipecanvas.config(scrollregion=self.recipecanvas.bbox("all"))
 
@@ -588,7 +653,7 @@ class RecipeFinder:
 
         alle_dateien = []
         path = f'{self.dir_name}/RecipeFinder/Recipes'
-        files = self.sftp.listdir("./RecipeFinder/Recipes")
+        
         for root, dirs, files in os.walk(path):
             for file in files:
                 print(file)
@@ -705,6 +770,9 @@ class RecipeFinder:
         stats = {str(category): 0 for category in self.categories}
 
         for recipe_title, recipe_data in self.recipes.items():
+            if not isinstance(recipe_data, dict):
+                continue
+
             if recipe_data.get("Liked") == True:
                 cat = recipe_data.get("Category")
                 if cat in stats:
@@ -770,6 +838,8 @@ class RecipeFinder:
 
         
     def synchronise(self):
+        if self.sftp is None:
+            return
         import stat
         LOCAL_RECIPES = f"{self.dir_name}/RecipeFinder/Recipes"
         LOCAL_PICTURES = f"{self.dir_name}/RecipeFinder/Recipes/Pictures"
@@ -1219,7 +1289,19 @@ class RecipeFinder:
                     f_dst.write(f_src.read())
 
             with open(f"{self.dir_name}/RecipeFinder/Recipes/{title}.json", mode="w", encoding="utf-8") as f:
-                json.dump({"Title": f"{title}", "Description": f"{self.NewRecipe.get(1.0, "end")}", "Category": f"{category.replace(" ", "")}", "Ingredients": RecipeIngredients, "Liked": False, "Done": False}, f, indent=4,ensure_ascii=False)
+                json.dump(
+                    {
+                        "Title": title,
+                        "Description": self.NewRecipe.get("1.0", "end"),
+                        "Category": category.replace(" ", ""),
+                        "Ingredients": RecipeIngredients,
+                        "Liked": False,
+                        "Done": False
+                    },
+                    f,
+                    indent=4,
+                    ensure_ascii=False
+                )
             self.openRecipe(recipe=title)
             return title
         def askForCategory():
@@ -1234,7 +1316,7 @@ class RecipeFinder:
                 name = self.search_var.get()
                 category = simpledialog.askstring("Kategorie", f"Welcher Kategorie würdest du {name} zuordnen?")
                 if category:
-                    self.ingredients[name] = (category, False)
+                    self.ingredients[name] = [category, False]
                     checkIfMatching()
 
                     with open(f"{self.dir_name}/RecipeFinder/Ingredients/ingredients.json", mode="w", encoding="utf-8") as f:
